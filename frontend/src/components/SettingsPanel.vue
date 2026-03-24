@@ -2,19 +2,19 @@
 import { onMounted, reactive, ref } from 'vue'
 import { loadSettings, saveSettings, type SettingsData } from '../lib/backend'
 
-const form = reactive<SettingsData>({
+const settingsState = ref<SettingsData | null>(null)
+const form = reactive({
   token: '',
   masterPassword: '',
-  syncPath: '',
 })
 const status = ref('')
 
 onMounted(async () => {
   try {
     const saved = await loadSettings()
+    settingsState.value = saved
     form.token = saved.token ?? ''
     form.masterPassword = saved.masterPassword ?? ''
-    form.syncPath = saved.syncPath ?? ''
   } catch (error) {
     status.value = `加载设置失败: ${String(error)}`
   }
@@ -22,11 +22,19 @@ onMounted(async () => {
 
 async function persistSettings(): Promise<void> {
   try {
-    await saveSettings({
+    const current = settingsState.value ?? {
+      token: '',
+      masterPassword: '',
+      activeProfileId: '',
+      profiles: [],
+    }
+    const next: SettingsData = {
+      ...current,
       token: form.token,
       masterPassword: form.masterPassword,
-      syncPath: form.syncPath,
-    })
+    }
+    await saveSettings(next)
+    settingsState.value = next
     status.value = '设置保存成功'
   } catch (error) {
     status.value = `保存失败: ${String(error)}`
