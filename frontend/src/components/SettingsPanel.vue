@@ -1,23 +1,36 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
+import { loadSettings, saveSettings, type SettingsData } from '../lib/backend'
 
-interface SettingsForm {
-  token: string
-  masterPassword: string
-}
-
-const form = reactive<SettingsForm>({
+const form = reactive<SettingsData>({
   token: '',
   masterPassword: '',
+  syncPath: '',
+})
+const status = ref('')
+
+onMounted(async () => {
+  try {
+    const saved = await loadSettings()
+    form.token = saved.token ?? ''
+    form.masterPassword = saved.masterPassword ?? ''
+    form.syncPath = saved.syncPath ?? ''
+  } catch (error) {
+    status.value = `加载设置失败: ${String(error)}`
+  }
 })
 
-function saveSettings(): void {
-  const payload = {
-    token: form.token,
-    masterPassword: form.masterPassword,
+async function persistSettings(): Promise<void> {
+  try {
+    await saveSettings({
+      token: form.token,
+      masterPassword: form.masterPassword,
+      syncPath: form.syncPath,
+    })
+    status.value = '设置保存成功'
+  } catch (error) {
+    status.value = `保存失败: ${String(error)}`
   }
-  console.log('[Mock Save] Settings payload:', payload)
-  window.alert(`已模拟保存\nToken: ${payload.token}\nMaster Password: ${payload.masterPassword}`)
 }
 </script>
 
@@ -49,10 +62,12 @@ function saveSettings(): void {
       <button
         type="button"
         class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-        @click="saveSettings"
+        @click="persistSettings"
       >
         保存
       </button>
+
+      <p v-if="status" class="text-sm text-slate-600">{{ status }}</p>
     </div>
   </section>
 </template>

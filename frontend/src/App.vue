@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import SettingsPanel from './components/SettingsPanel.vue'
+import SyncPanel from './components/SyncPanel.vue'
 
-type TabKey = 'home' | 'settings'
+type TabKey = 'home' | 'settings' | 'sync'
 
 const activeTab = ref<TabKey>('home')
 </script>
@@ -17,7 +18,7 @@ const activeTab = ref<TabKey>('home')
         </div>
       </header>
 
-      <nav class="mb-6 flex gap-3">
+      <nav class="mb-6 flex flex-wrap gap-3">
         <button
           class="rounded-lg px-4 py-2 text-sm font-medium transition"
           :class="activeTab === 'home' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
@@ -32,16 +33,24 @@ const activeTab = ref<TabKey>('home')
         >
           设置
         </button>
+        <button
+          class="rounded-lg px-4 py-2 text-sm font-medium transition"
+          :class="activeTab === 'sync' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+          @click="activeTab = 'sync'"
+        >
+          同步
+        </button>
       </nav>
 
       <section v-if="activeTab === 'home'" class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-left">
         <h2 class="mb-2 text-lg font-semibold text-slate-900">欢迎使用 GistSync</h2>
         <p class="text-sm text-slate-600">
-          当前为阶段 1 骨架版本。请点击上方“设置”进入配置页。
+          在“设置”中保存 Token 和主密码，在“同步”中配置路径并执行上传/下载。
         </p>
       </section>
 
-      <SettingsPanel v-else />
+      <SettingsPanel v-else-if="activeTab === 'settings'" />
+      <SyncPanel v-else />
     </div>
   </div>
 </template>
