@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { downloadSync, loadSettings, saveSettings, uploadSync, type SettingsData } from '../lib/backend'
+import { chooseSyncFile, downloadSync, loadSettings, saveSettings, uploadSync, type SettingsData } from '../lib/backend'
 
 const form = reactive<SettingsData>({
   token: '',
@@ -30,6 +30,20 @@ async function saveSyncPathOnly(): Promise<void> {
     status.value = '同步路径已保存'
   } catch (error) {
     status.value = `保存同步路径失败: ${String(error)}`
+  }
+}
+
+async function handleChooseFile(): Promise<void> {
+  try {
+    const selectedPath = await chooseSyncFile()
+    if (!selectedPath) {
+      return
+    }
+    form.syncPath = selectedPath
+    await saveSyncPathOnly()
+    status.value = `已选择文件: ${selectedPath}`
+  } catch (error) {
+    status.value = `选择文件失败: ${String(error)}`
   }
 }
 
@@ -85,6 +99,13 @@ async function handleDownload(): Promise<void> {
       </label>
 
       <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-600"
+          @click="handleChooseFile"
+        >
+          选择文件
+        </button>
         <button
           type="button"
           class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"

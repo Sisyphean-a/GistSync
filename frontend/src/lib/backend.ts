@@ -13,6 +13,7 @@ declare global {
           SaveSettings: (data: SettingsData) => Promise<void>
           UploadSync: () => Promise<string>
           DownloadSync: (overwrite: boolean) => Promise<string>
+          ChooseSyncFile: () => Promise<string>
         }
       }
     }
@@ -28,3 +29,5 @@ export const saveSettings = (data: SettingsData): Promise<void> => appAPI().Save
 export const uploadSync = (): Promise<string> => appAPI().UploadSync()
 
 export const downloadSync = (overwrite: boolean): Promise<string> => appAPI().DownloadSync(overwrite)
+
+export const chooseSyncFile = (): Promise<string> => appAPI().ChooseSyncFile()

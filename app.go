@@ -8,6 +8,7 @@ import (
 	"GistSync/internal/gistapi"
 	"GistSync/internal/settings"
 	"GistSync/internal/syncflow"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -86,6 +87,16 @@ func (a *App) DownloadSync(overwrite bool) (string, error) {
 		return "", err
 	}
 	return "下载同步完成", nil
+}
+
+func (a *App) ChooseSyncFile() (string, error) {
+	selection, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "选择要同步的文件",
+	})
+	if err != nil {
+		return "", err
+	}
+	return selection, nil
 }
 
 func newSyncService(token string) (*syncflow.Service, error) {
