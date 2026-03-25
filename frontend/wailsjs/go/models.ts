@@ -142,6 +142,7 @@ export namespace syncflow {
 	    masterPassword: string;
 	    restoreMode: string;
 	    restoreRoot: string;
+	    selectedItemIds: string[];
 	    overwriteItemIds: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -155,6 +156,7 @@ export namespace syncflow {
 	        this.masterPassword = source["masterPassword"];
 	        this.restoreMode = source["restoreMode"];
 	        this.restoreRoot = source["restoreRoot"];
+	        this.selectedItemIds = source["selectedItemIds"];
 	        this.overwriteItemIds = source["overwriteItemIds"];
 	    }
 	}

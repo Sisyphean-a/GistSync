@@ -62,8 +62,8 @@ export function SetActiveProfile(arg1) {
   return window['go']['main']['App']['SetActiveProfile'](arg1);
 }
 
-export function UploadProfile(arg1) {
-  return window['go']['main']['App']['UploadProfile'](arg1);
+export function UploadProfile(arg1, arg2) {
+  return window['go']['main']['App']['UploadProfile'](arg1, arg2);
 }
 
 export function UploadSync() {

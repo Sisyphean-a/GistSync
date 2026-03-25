@@ -183,13 +183,13 @@ func (a *App) RemoveProfileItems(profileID string, itemIDs []string) error {
 	return a.settings.Save(data)
 }
 
-func (a *App) UploadProfile(profileID string) (syncflow.UploadProfileResult, error) {
+func (a *App) UploadProfile(profileID string, selectedItemIDs []string) (syncflow.UploadProfileResult, error) {
 	data, profile, service, err := a.loadContext(profileID)
 	if err != nil {
 		return syncflow.UploadProfileResult{}, err
 	}
 	return service.UploadProfile(a.ctx, syncflow.UploadProfileRequest{
-		Profile: profile, MasterPassword: data.MasterPassword,
+		Profile: profile, MasterPassword: data.MasterPassword, SelectedItemIDs: selectedItemIDs,
 	})
 }
 
@@ -245,7 +245,7 @@ func (a *App) UploadSync() (string, error) {
 	if strings.TrimSpace(profileID) == "" {
 		return "", syncflow.ErrProfileNotFound
 	}
-	result, err := a.UploadProfile(profileID)
+	result, err := a.UploadProfile(profileID, nil)
 	if err != nil {
 		return "", err
 	}

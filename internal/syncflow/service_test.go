@@ -103,6 +103,51 @@ func TestService_UploadAndApplySnapshot(t *testing.T) {
 	}
 }
 
+func TestService_UploadProfile_WithSelectedItemIDs(t *testing.T) {
+	cloud := newFakeCloud()
+	service := NewService(cloud)
+	tmpDir := t.TempDir()
+	fileA := filepath.Join(tmpDir, "a.txt")
+	fileB := filepath.Join(tmpDir, "b.txt")
+	if err := os.WriteFile(fileA, []byte("A"), 0o600); err != nil {
+		t.Fatalf("write fileA: %v", err)
+	}
+	if err := os.WriteFile(fileB, []byte("B"), 0o600); err != nil {
+		t.Fatalf("write fileB: %v", err)
+	}
+	profile := settings.Profile{
+		ID:          "profile-selective-upload",
+		Name:        "Work",
+		RestoreMode: restoreOriginal,
+		Enabled:     true,
+		Items: []settings.ProfileItem{
+			{ID: "item-a", SourcePathTemplate: fileA, RelativePath: "a.txt", Enabled: true},
+			{ID: "item-b", SourcePathTemplate: fileB, RelativePath: "b.txt", Enabled: true},
+		},
+	}
+
+	result, err := service.UploadProfile(context.Background(), UploadProfileRequest{
+		Profile: profile, MasterPassword: "pwd", SelectedItemIDs: []string{"item-b"},
+	})
+	if err != nil {
+		t.Fatalf("UploadProfile returned error: %v", err)
+	}
+	if result.Uploaded != 1 {
+		t.Fatalf("expected one uploaded file, got %d", result.Uploaded)
+	}
+
+	var manifestData manifest
+	if err = json.Unmarshal([]byte(cloud.files[manifestFileName]), &manifestData); err != nil {
+		t.Fatalf("decode manifest failed: %v", err)
+	}
+	if len(manifestData.Snapshots) != 1 || len(manifestData.Snapshots[0].Items) != 1 {
+		t.Fatalf("expected one snapshot item, got %#v", manifestData.Snapshots)
+	}
+	if manifestData.Snapshots[0].Items[0].ItemID != "item-b" {
+		t.Fatalf("expected item-b uploaded, got %s", manifestData.Snapshots[0].Items[0].ItemID)
+	}
+}
+
 func TestService_ListSnapshots(t *testing.T) {
 	cloud := newFakeCloud()
 	service := NewService(cloud)
@@ -182,6 +227,80 @@ func TestService_ApplySnapshotRootedMode(t *testing.T) {
 	}
 	if string(out) != "hello" {
 		t.Fatalf("unexpected rooted content: %q", string(out))
+	}
+}
+
+func TestService_ApplySnapshot_WithSelectedItemIDs(t *testing.T) {
+	cloud := newFakeCloud()
+	service := NewService(cloud)
+	rootDir := t.TempDir()
+	fileA := filepath.Join(rootDir, "a.txt")
+	fileB := filepath.Join(rootDir, "b.txt")
+	if err := os.WriteFile(fileA, []byte("local-a"), 0o600); err != nil {
+		t.Fatalf("write local fileA failed: %v", err)
+	}
+	encA, err := securityEncrypt("remote-a", "pwd")
+	if err != nil {
+		t.Fatalf("encrypt A failed: %v", err)
+	}
+	encB, err := securityEncrypt("remote-b", "pwd")
+	if err != nil {
+		t.Fatalf("encrypt B failed: %v", err)
+	}
+	manifestData := manifest{
+		Version: 2,
+		Profiles: []manifestProfile{
+			{ID: "p1", Name: "P1", RestoreMode: restoreRooted, Items: []manifestProfileItem{}},
+		},
+		Snapshots: []manifestSnapshot{
+			{
+				ID: "s1", ProfileID: "p1", CreatedAt: "2026-03-24T11:00:00Z",
+				Items: []manifestSnapshotItem{
+					{ItemID: "i1", SourcePathTemplate: "{{HOME}}/a.txt", RelativePath: "a.txt", BlobFile: "blob1.enc"},
+					{ItemID: "i2", SourcePathTemplate: "{{HOME}}/b.txt", RelativePath: "b.txt", BlobFile: "blob2.enc"},
+				},
+			},
+		},
+	}
+	raw, _ := json.Marshal(manifestData)
+	cloud.files[manifestFileName] = string(raw)
+	cloud.files["blob1.enc"] = encA
+	cloud.files["blob2.enc"] = encB
+
+	conflicts, err := service.PreviewApplyConflicts(context.Background(), ApplySnapshotRequest{
+		ProfileID: "p1", SnapshotID: "s1", RestoreMode: restoreRooted, RestoreRoot: rootDir, SelectedItemIDs: []string{"i1"},
+	})
+	if err != nil {
+		t.Fatalf("PreviewApplyConflicts returned error: %v", err)
+	}
+	if len(conflicts) != 1 || conflicts[0].ItemID != "i1" {
+		t.Fatalf("expected only i1 conflict, got %#v", conflicts)
+	}
+
+	result, err := service.ApplySnapshot(context.Background(), ApplySnapshotRequest{
+		ProfileID: "p1", SnapshotID: "s1", MasterPassword: "pwd", RestoreMode: restoreRooted,
+		RestoreRoot: rootDir, SelectedItemIDs: []string{"i2"},
+	})
+	if err != nil {
+		t.Fatalf("ApplySnapshot returned error: %v", err)
+	}
+	if result.Applied != 1 || result.Skipped != 0 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+
+	rawB, err := os.ReadFile(fileB)
+	if err != nil {
+		t.Fatalf("read fileB failed: %v", err)
+	}
+	if string(rawB) != "remote-b" {
+		t.Fatalf("expected fileB to be updated, got %q", string(rawB))
+	}
+	rawA, err := os.ReadFile(fileA)
+	if err != nil {
+		t.Fatalf("read fileA failed: %v", err)
+	}
+	if string(rawA) != "local-a" {
+		t.Fatalf("expected fileA unchanged, got %q", string(rawA))
 	}
 }
 

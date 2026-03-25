@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 :root {
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: "Nunito", "PingFang SC", "Microsoft YaHei", sans-serif;
   color: #0f172a;
-  background: radial-gradient(circle at top, #f8fafc 0%, #e2e8f0 100%);
+  background: radial-gradient(circle at 0% 0%, #fdf8f3 0%, #eef2ff 40%, #e2e8f0 100%);
 }
 
 html,
@@ -17,4 +17,10 @@ body,
 
 body {
   min-height: 100vh;
+}
+
+.app-shell {
+  background:
+    radial-gradient(circle at 100% 0%, rgb(216 180 254 / 18%) 0%, rgb(216 180 254 / 0%) 34%),
+    radial-gradient(circle at 0% 100%, rgb(251 191 36 / 18%) 0%, rgb(251 191 36 / 0%) 28%);
 }

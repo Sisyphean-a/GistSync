@@ -52,6 +52,7 @@ type FileRequest struct {
 type UploadProfileRequest struct {
 	Profile        settings.Profile
 	MasterPassword string
+	SelectedItemIDs []string
 }
 
 type UploadProfileResult struct {
@@ -75,6 +76,7 @@ type ApplySnapshotRequest struct {
 	MasterPassword   string   `json:"masterPassword"`
 	RestoreMode      string   `json:"restoreMode"`
 	RestoreRoot      string   `json:"restoreRoot"`
+	SelectedItemIDs  []string `json:"selectedItemIds"`
 	OverwriteItemIDs []string `json:"overwriteItemIds"`
 }
 
@@ -177,7 +179,11 @@ func (s *Service) UploadProfile(ctx context.Context, req UploadProfileRequest) (
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 
+	selectedSet := buildSelectedSet(req.SelectedItemIDs)
 	for _, item := range req.Profile.Items {
+		if !isSelected(item.ID, selectedSet) {
+			continue
+		}
 		if !item.Enabled {
 			continue
 		}
@@ -246,7 +252,11 @@ func (s *Service) PreviewApplyConflicts(ctx context.Context, req ApplySnapshotRe
 	}
 
 	var conflicts []ApplyConflict
+	selectedSet := buildSelectedSet(req.SelectedItemIDs)
 	for _, item := range snap.Items {
+		if !isSelected(item.ItemID, selectedSet) {
+			continue
+		}
 		targetPath, targetErr := resolveTargetPath(item, restoreMode, req.RestoreRoot)
 		if targetErr != nil {
 			return nil, targetErr
@@ -281,9 +291,13 @@ func (s *Service) ApplySnapshot(ctx context.Context, req ApplySnapshotRequest) (
 	for _, id := range req.OverwriteItemIDs {
 		overwriteSet[id] = true
 	}
+	selectedSet := buildSelectedSet(req.SelectedItemIDs)
 
 	result := ApplySnapshotResult{}
 	for _, item := range snap.Items {
+		if !isSelected(item.ItemID, selectedSet) {
+			continue
+		}
 		itemResult := ApplyItemResult{ItemID: item.ItemID}
 		targetPath, targetErr := resolveTargetPath(item, restoreMode, req.RestoreRoot)
 		if targetErr != nil {
@@ -330,6 +344,27 @@ func (s *Service) ApplySnapshot(ctx context.Context, req ApplySnapshotRequest) (
 		result.Applied++
 	}
 	return result, nil
+}
+
+func buildSelectedSet(ids []string) map[string]bool {
+	if len(ids) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		set[id] = true
+	}
+	return set
+}
+
+func isSelected(itemID string, selectedSet map[string]bool) bool {
+	if selectedSet == nil {
+		return true
+	}
+	return selectedSet[itemID]
 }
 
 func shouldSkip(path string, overwrite bool) bool {

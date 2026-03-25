@@ -37,6 +37,7 @@ export interface ApplySnapshotRequest {
   masterPassword: string
   restoreMode: string
   restoreRoot: string
+  selectedItemIds: string[]
   overwriteItemIds: string[]
 }
 
@@ -65,7 +66,7 @@ declare global {
           SetActiveProfile: (profileId: string) => Promise<void>
           ChooseFilesForProfile: (profileId: string) => Promise<string[]>
           RemoveProfileItems: (profileId: string, itemIds: string[]) => Promise<void>
-          UploadProfile: (profileId: string) => Promise<{ snapshotId: string; uploaded: number }>
+          UploadProfile: (profileId: string, selectedItemIds: string[]) => Promise<{ snapshotId: string; uploaded: number }>
           ListSnapshots: (profileId: string) => Promise<SnapshotMeta[]>
           PreviewApplyConflicts: (req: ApplySnapshotRequest) => Promise<ApplyConflict[]>
           ApplySnapshot: (req: ApplySnapshotRequest) => Promise<ApplySnapshotResult>
@@ -85,7 +86,8 @@ export const deleteProfile = (profileId: string): Promise<void> => appAPI().Dele
 export const setActiveProfile = (profileId: string): Promise<void> => appAPI().SetActiveProfile(profileId)
 export const chooseFilesForProfile = (profileId: string): Promise<string[]> => appAPI().ChooseFilesForProfile(profileId)
 export const removeProfileItems = (profileId: string, itemIds: string[]): Promise<void> => appAPI().RemoveProfileItems(profileId, itemIds)
-export const uploadProfile = (profileId: string): Promise<{ snapshotId: string; uploaded: number }> => appAPI().UploadProfile(profileId)
+export const uploadProfile = (profileId: string, selectedItemIds: string[]): Promise<{ snapshotId: string; uploaded: number }> =>
+  appAPI().UploadProfile(profileId, selectedItemIds)
 export const listSnapshots = (profileId: string): Promise<SnapshotMeta[]> => appAPI().ListSnapshots(profileId)
 export const previewApplyConflicts = (req: ApplySnapshotRequest): Promise<ApplyConflict[]> => appAPI().PreviewApplyConflicts(req)
 export const applySnapshot = (req: ApplySnapshotRequest): Promise<ApplySnapshotResult> => appAPI().ApplySnapshot(req)
