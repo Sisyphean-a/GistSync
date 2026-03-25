@@ -164,9 +164,12 @@ function closeConflictDialog(): void {
 
 <template>
   <section class="space-y-4">
-    <article class="rounded-xl border border-slate-200 p-4">
-      <h2 class="mb-3 text-base font-semibold text-slate-900">同步中心</h2>
-      <div class="grid gap-3 md:grid-cols-[220px_1fr]">
+    <article class="rounded-xl border border-slate-200 bg-white p-4">
+      <div class="mb-4 border-b border-slate-200 pb-3">
+        <h2 class="text-base font-semibold text-slate-900">同步中心</h2>
+        <p class="mt-1 text-xs text-slate-500">选择配置和快照后，可按条目执行上传或恢复。</p>
+      </div>
+      <div class="grid gap-3 xl:grid-cols-[280px_1fr]">
         <label class="text-sm text-slate-700">
           <span class="mb-1 block font-medium">当前配置集</span>
           <select
@@ -189,31 +192,37 @@ function closeConflictDialog(): void {
       </div>
     </article>
 
-    <article class="rounded-xl border border-slate-200 p-4">
-      <h3 class="mb-3 text-sm font-semibold text-slate-900">上传到云端（可选择条目）</h3>
-      <div class="mb-3 grid gap-2 md:grid-cols-2">
-        <label v-for="item in activeProfile?.items || []" :key="`upload-${item.id}`" class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
-          <input v-model="selectedUploadItemIds" :value="item.id" type="checkbox">
-          <span class="truncate">{{ item.relativePath || item.sourcePathTemplate }}</span>
-        </label>
-      </div>
-      <button class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-60" :disabled="loading" @click="uploadSelectedItems">
-        上传选中条目
-      </button>
-    </article>
+    <section class="grid gap-4 xl:grid-cols-2">
+      <article class="rounded-xl border border-slate-200 bg-white p-4">
+        <h3 class="mb-3 text-sm font-semibold text-slate-900">上传到云端（可选择条目）</h3>
+        <div class="mb-3 max-h-[320px] overflow-auto rounded-lg border border-slate-200 p-2">
+          <div class="grid gap-2">
+            <label v-for="item in activeProfile?.items || []" :key="`upload-${item.id}`" class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+              <input v-model="selectedUploadItemIds" :value="item.id" type="checkbox">
+              <span class="truncate">{{ item.relativePath || item.sourcePathTemplate }}</span>
+            </label>
+          </div>
+        </div>
+        <button class="h-10 min-w-[136px] rounded-lg bg-emerald-700 px-4 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-60" :disabled="loading" @click="uploadSelectedItems">
+          上传选中条目
+        </button>
+      </article>
 
-    <article class="rounded-xl border border-slate-200 p-4">
-      <h3 class="mb-3 text-sm font-semibold text-slate-900">从云端恢复（可选择条目）</h3>
-      <div class="mb-3 grid gap-2 md:grid-cols-2">
-        <label v-for="item in activeProfile?.items || []" :key="`restore-${item.id}`" class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
-          <input v-model="selectedRestoreItemIds" :value="item.id" type="checkbox">
-          <span class="truncate">{{ item.relativePath || item.sourcePathTemplate }}</span>
-        </label>
-      </div>
-      <button class="rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-60" :disabled="loading" @click="startApplyFlow">
-        预检冲突并应用快照
-      </button>
-    </article>
+      <article class="rounded-xl border border-slate-200 bg-white p-4">
+        <h3 class="mb-3 text-sm font-semibold text-slate-900">从云端恢复（可选择条目）</h3>
+        <div class="mb-3 max-h-[320px] overflow-auto rounded-lg border border-slate-200 p-2">
+          <div class="grid gap-2">
+            <label v-for="item in activeProfile?.items || []" :key="`restore-${item.id}`" class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+              <input v-model="selectedRestoreItemIds" :value="item.id" type="checkbox">
+              <span class="truncate">{{ item.relativePath || item.sourcePathTemplate }}</span>
+            </label>
+          </div>
+        </div>
+        <button class="h-10 min-w-[172px] rounded-lg bg-amber-700 px-4 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-60" :disabled="loading" @click="startApplyFlow">
+          预检冲突并应用快照
+        </button>
+      </article>
+    </section>
 
     <p v-if="status" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{{ status }}</p>
 
