@@ -28,17 +28,41 @@ type SyncService interface {
 
 type SyncFactory func(token string) (SyncService, error)
 
+type ProfileManager interface {
+	LoadSettings(ctx context.Context) (settings.Data, error)
+	SaveSettings(ctx context.Context, data settings.Data) error
+	PullProfilesFromCloud(ctx context.Context) (int, error)
+	CreateProfile(ctx context.Context, name string) (settings.Profile, error)
+	DeleteProfile(ctx context.Context, profileID string) error
+	SetActiveProfile(ctx context.Context, profileID string) error
+	AddFilesToProfile(ctx context.Context, profileID string, paths []string) error
+	RemoveProfileItems(ctx context.Context, profileID string, itemIDs []string) error
+}
+
+type SyncOrchestrator interface {
+	UploadProfile(ctx context.Context, profileID string, selectedItemIDs []string) (syncflow.UploadProfileResult, error)
+	ListSnapshots(ctx context.Context, profileID string) ([]syncflow.SnapshotMeta, error)
+	PreviewApplyConflicts(ctx context.Context, req syncflow.ApplySnapshotRequest) ([]syncflow.ApplyConflict, error)
+	ApplySnapshot(ctx context.Context, req syncflow.ApplySnapshotRequest) (syncflow.ApplySnapshotResult, error)
+	UploadSync(ctx context.Context) (string, error)
+	DownloadSync(ctx context.Context, overwrite bool) (string, error)
+}
+
 type Service struct {
-	store      SettingsStore
-	buildSync  SyncFactory
-	generateID func(prefix string) string
+	profiles ProfileManager
+	syncer   SyncOrchestrator
 }
 
 func NewService(store SettingsStore) *Service {
+	buildSync := defaultSyncFactory
+	generateID := profileutil.GenerateID
+	return NewServiceWithDeps(store, buildSync, generateID)
+}
+
+func NewServiceWithDeps(store SettingsStore, buildSync SyncFactory, generateID func(prefix string) string) *Service {
 	return &Service{
-		store:      store,
-		buildSync:  defaultSyncFactory,
-		generateID: profileutil.GenerateID,
+		profiles: NewDefaultProfileManager(store, buildSync, generateID),
+		syncer:   NewDefaultSyncOrchestrator(store, buildSync),
 	}
 }
 

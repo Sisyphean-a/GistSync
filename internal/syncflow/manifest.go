@@ -4,39 +4,63 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"GistSync/internal/settings"
 )
 
 func (s *Service) loadManifest(ctx context.Context) (string, manifest, error) {
+	startedAt := time.Now()
+	action := "load_manifest"
 	gistID, err := s.cloud.EnsureManifestGist(ctx)
 	if err != nil {
+		s.observer.Record(action, time.Since(startedAt), false, 0, 0)
 		return "", manifest{}, err
+	}
+	if cached, hit, cacheErr := s.manifestCache.Load(gistID, s.cacheTTL); cacheErr == nil && hit {
+		s.observer.Record(action, time.Since(startedAt), true, estimateManifestSize(cached), len(cached.Snapshots))
+		return gistID, cached, nil
 	}
 	content, err := s.cloud.GetFileContent(ctx, FileRequest{GistID: gistID, FileName: manifestFileName})
 	if err != nil {
+		s.observer.Record(action, time.Since(startedAt), false, 0, 0)
 		return "", manifest{}, err
 	}
 	if empty(content) {
-		return gistID, manifest{Version: manifestVersion}, nil
+		data := manifest{Version: manifestVersion}
+		_ = s.manifestCache.Save(gistID, data)
+		s.observer.Record(action, time.Since(startedAt), true, estimateManifestSize(data), len(data.Snapshots))
+		return gistID, data, nil
 	}
 	var data manifest
 	if err = json.Unmarshal([]byte(content), &data); err != nil {
+		s.observer.Record(action, time.Since(startedAt), false, len(content), 0)
 		return "", manifest{}, fmt.Errorf("decode manifest: %w", err)
 	}
 	if data.Version == 0 {
 		data.Version = manifestVersion
 	}
+	_ = s.manifestCache.Save(gistID, data)
+	s.observer.Record(action, time.Since(startedAt), true, len(content), len(data.Snapshots))
 	return gistID, data, nil
 }
 
 func (s *Service) saveManifest(ctx context.Context, gistID string, data manifest) error {
+	startedAt := time.Now()
+	action := "save_manifest"
 	data.Version = manifestVersion
 	raw, err := json.Marshal(data)
 	if err != nil {
+		s.observer.Record(action, time.Since(startedAt), false, 0, len(data.Snapshots))
 		return fmt.Errorf("encode manifest: %w", err)
 	}
-	return s.cloud.UpsertFile(ctx, UpsertFileRequest{GistID: gistID, FileName: manifestFileName, Content: string(raw)})
+	if err = s.cloud.UpsertFile(ctx, UpsertFileRequest{GistID: gistID, FileName: manifestFileName, Content: string(raw)}); err != nil {
+		s.observer.Record(action, time.Since(startedAt), false, len(raw), len(data.Snapshots))
+		return err
+	}
+	_ = s.manifestCache.Save(gistID, data)
+	s.observer.Record(action, time.Since(startedAt), true, len(raw), len(data.Snapshots))
+	return nil
 }
 
 func (m *manifest) upsertProfile(profile settings.Profile) {
@@ -100,4 +124,12 @@ func (m *manifest) findSnapshot(profileID string, snapshotID string) (manifestSn
 		}
 	}
 	return latest, found
+}
+
+func estimateManifestSize(data manifest) int {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return 0
+	}
+	return len(raw)
 }

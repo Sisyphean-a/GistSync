@@ -12,38 +12,153 @@ import {
   SetActiveProfile,
   UploadProfile,
 } from '../../wailsjs/go/main/App'
-import type { settings, syncflow } from '../../wailsjs/go/models'
+import { settings, syncflow } from '../../wailsjs/go/models'
 
-type Plain<T> =
-  T extends Array<infer U>
-    ? Plain<U>[]
-    : T extends object
-      ? { [K in keyof T as T[K] extends (...args: unknown[]) => unknown ? never : K]: Plain<T[K]> }
-      : T
+export interface ProfileItem {
+  id: string
+  sourcePathTemplate: string
+  relativePath: string
+  enabled: boolean
+}
 
-export type ProfileItem = Plain<settings.ProfileItem>
-export type Profile = Plain<settings.Profile>
-export type SettingsData = Plain<settings.Data>
-export type SnapshotMeta = Plain<syncflow.SnapshotMeta>
-export type ApplyConflict = Plain<syncflow.ApplyConflict>
-export type ApplySnapshotRequest = Plain<syncflow.ApplySnapshotRequest>
-export type ApplyItemResult = Plain<syncflow.ApplyItemResult>
-export type ApplySnapshotResult = Plain<syncflow.ApplySnapshotResult>
-export type UploadProfileResult = Plain<syncflow.UploadProfileResult>
+export interface Profile {
+  id: string
+  name: string
+  restoreMode: string
+  restoreRoot: string
+  enabled: boolean
+  items: ProfileItem[]
+}
 
-export const loadSettings = async (): Promise<SettingsData> => LoadSettingsV2() as unknown as SettingsData
-export const saveSettings = (data: SettingsData): Promise<void> => SaveSettingsV2(data as unknown as settings.Data)
-export const createProfile = async (name: string): Promise<Profile> => CreateProfile(name) as unknown as Profile
-export const deleteProfile = (profileId: string): Promise<void> => DeleteProfile(profileId)
-export const setActiveProfile = (profileId: string): Promise<void> => SetActiveProfile(profileId)
-export const chooseFilesForProfile = (profileId: string): Promise<string[]> => ChooseFilesForProfile(profileId)
-export const removeProfileItems = (profileId: string, itemIds: string[]): Promise<void> => RemoveProfileItems(profileId, itemIds)
+export interface SettingsData {
+  token: string
+  masterPassword: string
+  activeProfileId: string
+  profiles: Profile[]
+  cloudBootstrapDone?: boolean
+  syncPath?: string
+}
+
+export interface SnapshotMeta {
+  id: string
+  createdAt: string
+}
+
+export interface ApplyConflict {
+  itemId: string
+  targetPath: string
+}
+
+export interface ApplySnapshotRequest {
+  profileId: string
+  snapshotId: string
+  masterPassword: string
+  restoreMode: string
+  restoreRoot: string
+  selectedItemIds: string[]
+  overwriteItemIds: string[]
+}
+
+export interface ApplyItemResult {
+  itemId: string
+  targetPath: string
+  status: string
+  reason: string
+}
+
+export interface ApplySnapshotResult {
+  applied: number
+  skipped: number
+  items: ApplyItemResult[]
+}
+
+export interface UploadProfileResult {
+  snapshotId: string
+  uploaded: number
+}
+
+function mapProfileItem(item: settings.ProfileItem): ProfileItem {
+  return {
+    id: item.id,
+    sourcePathTemplate: item.sourcePathTemplate,
+    relativePath: item.relativePath,
+    enabled: item.enabled,
+  }
+}
+
+function mapProfile(profile: settings.Profile): Profile {
+  return {
+    id: profile.id,
+    name: profile.name,
+    restoreMode: profile.restoreMode,
+    restoreRoot: profile.restoreRoot,
+    enabled: profile.enabled,
+    items: (profile.items ?? []).map(mapProfileItem),
+  }
+}
+
+function mapSettings(data: settings.Data): SettingsData {
+  return {
+    token: data.token ?? '',
+    masterPassword: data.masterPassword ?? '',
+    activeProfileId: data.activeProfileId ?? '',
+    profiles: (data.profiles ?? []).map(mapProfile),
+    cloudBootstrapDone: data.cloudBootstrapDone,
+    syncPath: data.syncPath,
+  }
+}
+
+function toSettingsModel(data: SettingsData): settings.Data {
+  return settings.Data.createFrom(data)
+}
+
+function mapSnapshot(item: syncflow.SnapshotMeta): SnapshotMeta {
+  return { id: item.id, createdAt: item.createdAt }
+}
+
+function mapConflict(item: syncflow.ApplyConflict): ApplyConflict {
+  return { itemId: item.itemId, targetPath: item.targetPath }
+}
+
+function mapApplyItem(item: syncflow.ApplyItemResult): ApplyItemResult {
+  return {
+    itemId: item.itemId,
+    targetPath: item.targetPath,
+    status: item.status,
+    reason: item.reason,
+  }
+}
+
+function mapApplyResult(result: syncflow.ApplySnapshotResult): ApplySnapshotResult {
+  return {
+    applied: result.applied,
+    skipped: result.skipped,
+    items: (result.items ?? []).map(mapApplyItem),
+  }
+}
+
+function toApplyRequestModel(req: ApplySnapshotRequest): syncflow.ApplySnapshotRequest {
+  return syncflow.ApplySnapshotRequest.createFrom(req)
+}
+
+function mapUploadResult(result: syncflow.UploadProfileResult): UploadProfileResult {
+  return { snapshotId: result.snapshotId, uploaded: result.uploaded }
+}
+
+export const loadSettings = async (): Promise<SettingsData> => mapSettings(await LoadSettingsV2())
+export const saveSettings = async (data: SettingsData): Promise<void> => SaveSettingsV2(toSettingsModel(data))
+export const createProfile = async (name: string): Promise<Profile> => mapProfile(await CreateProfile(name))
+export const deleteProfile = async (profileId: string): Promise<void> => DeleteProfile(profileId)
+export const setActiveProfile = async (profileId: string): Promise<void> => SetActiveProfile(profileId)
+export const chooseFilesForProfile = async (profileId: string): Promise<string[]> => ChooseFilesForProfile(profileId)
+export const removeProfileItems = async (profileId: string, itemIds: string[]): Promise<void> =>
+  RemoveProfileItems(profileId, itemIds)
 export const uploadProfile = async (profileId: string, selectedItemIds: string[]): Promise<UploadProfileResult> =>
-  UploadProfile(profileId, selectedItemIds) as unknown as UploadProfileResult
+  mapUploadResult(await UploadProfile(profileId, selectedItemIds))
 export const listSnapshots = async (profileId: string): Promise<SnapshotMeta[]> =>
-  ListSnapshots(profileId) as unknown as SnapshotMeta[]
+  (await ListSnapshots(profileId)).map(mapSnapshot)
 export const previewApplyConflicts = async (req: ApplySnapshotRequest): Promise<ApplyConflict[]> =>
-  PreviewApplyConflicts(req as unknown as syncflow.ApplySnapshotRequest) as unknown as ApplyConflict[]
+  (await PreviewApplyConflicts(toApplyRequestModel(req))).map(mapConflict)
 export const applySnapshot = async (req: ApplySnapshotRequest): Promise<ApplySnapshotResult> =>
-  ApplySnapshot(req as unknown as syncflow.ApplySnapshotRequest) as unknown as ApplySnapshotResult
-export const pullProfilesFromCloud = (): Promise<number> => PullProfilesFromCloud()
+  mapApplyResult(await ApplySnapshot(toApplyRequestModel(req)))
+export const pullProfilesFromCloud = async (): Promise<number> => PullProfilesFromCloud()

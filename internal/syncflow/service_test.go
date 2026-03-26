@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
+	"sync/atomic"
 	"testing"
 
 	"GistSync/internal/security"
@@ -16,9 +18,12 @@ type fakeCloud struct {
 	files  map[string]string
 }
 
+var fakeCloudCounter int64
+
 func newFakeCloud() *fakeCloud {
+	id := atomic.AddInt64(&fakeCloudCounter, 1)
 	return &fakeCloud{
-		gistID: "gist-1",
+		gistID: "gist-" + strconv.FormatInt(id, 10),
 		files: map[string]string{
 			manifestFileName: `{"version":2,"profiles":[],"snapshots":[]}`,
 		},

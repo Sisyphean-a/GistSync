@@ -49,8 +49,7 @@ func (f *fakeSync) ApplySnapshot(context.Context, syncflow.ApplySnapshotRequest)
 
 func TestService_AddFilesToProfile_NormalizesRelativePath(t *testing.T) {
 	store := &fakeStore{data: settings.Data{Profiles: []settings.Profile{{ID: "p1", Items: []settings.ProfileItem{}}}}}
-	svc := NewService(store)
-	svc.generateID = func(prefix string) string { return prefix + "-id" }
+	svc := NewServiceWithDeps(store, defaultSyncFactory, func(prefix string) string { return prefix + "-id" })
 
 	err := svc.AddFilesToProfile(context.Background(), "p1", []string{`C:\\Users\\me\\.gitconfig`})
 	if err != nil {
@@ -65,13 +64,12 @@ func TestService_AddFilesToProfile_NormalizesRelativePath(t *testing.T) {
 func TestService_DownloadSync_RequiresOverwrite(t *testing.T) {
 	store := &fakeStore{data: settings.Data{Token: "t1", ActiveProfileID: "p1", Profiles: []settings.Profile{{ID: "p1"}}}}
 	syncSvc := &fakeSync{preview: []syncflow.ApplyConflict{{ItemID: "i1", TargetPath: "/tmp/x"}}}
-	svc := NewService(store)
-	svc.buildSync = func(token string) (SyncService, error) {
+	svc := NewServiceWithDeps(store, func(token string) (SyncService, error) {
 		if token != "t1" {
 			t.Fatalf("unexpected token %q", token)
 		}
 		return syncSvc, nil
-	}
+	}, func(prefix string) string { return prefix + "-id" })
 
 	_, err := svc.DownloadSync(context.Background(), false)
 	if !errors.Is(err, ErrOverwriteRequired) {

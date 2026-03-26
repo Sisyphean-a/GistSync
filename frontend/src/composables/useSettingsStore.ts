@@ -9,6 +9,7 @@ import {
 
 const state = ref<SettingsData | null>(null)
 const loading = ref(false)
+let opChain: Promise<void> = Promise.resolve()
 
 const activeProfile = computed<Profile | null>(() => {
   const current = state.value
@@ -28,7 +29,13 @@ function cloneSettings(data: SettingsData): SettingsData {
   }
 }
 
-async function refresh(): Promise<void> {
+function enqueue<T>(operation: () => Promise<T>): Promise<T> {
+  const run = opChain.then(operation, operation)
+  opChain = run.then(() => undefined, () => undefined)
+  return run
+}
+
+async function refreshUnsafe(): Promise<void> {
   loading.value = true
   try {
     state.value = await loadSettings()
@@ -37,50 +44,86 @@ async function refresh(): Promise<void> {
   }
 }
 
-async function ensureLoaded(): Promise<void> {
+async function refresh(): Promise<void> {
+  await enqueue(async () => {
+    await refreshUnsafe()
+  })
+}
+
+async function ensureLoadedUnsafe(): Promise<void> {
   if (state.value) {
     return
   }
-  await refresh()
+  await refreshUnsafe()
+}
+
+async function ensureLoaded(): Promise<void> {
+  await enqueue(async () => {
+    await ensureLoadedUnsafe()
+  })
 }
 
 async function switchActiveProfile(profileId: string): Promise<void> {
-  await setActiveProfile(profileId)
-  await refresh()
+  await enqueue(async () => {
+    await setActiveProfile(profileId)
+    await refreshUnsafe()
+  })
 }
 
-async function persist(next: SettingsData): Promise<void> {
-  await saveSettings(next)
+async function persistUnsafe(next: SettingsData, rollback: SettingsData): Promise<void> {
   state.value = next
+  try {
+    await saveSettings(next)
+  } catch (error) {
+    state.value = rollback
+    throw error
+  }
 }
 
-async function saveCredentials(token: string, masterPassword: string): Promise<void> {
-  await ensureLoaded()
+function updateCredentials(current: SettingsData, token: string, masterPassword: string): SettingsData {
+  return {
+    ...cloneSettings(current),
+    token,
+    masterPassword,
+  }
+}
+
+function updateRestore(current: SettingsData, mode: 'original' | 'rooted', root: string): SettingsData {
+  const next = cloneSettings(current)
+  const profile = next.profiles.find((item) => item.id === next.activeProfileId)
+  if (!profile) {
+    return next
+  }
+  profile.restoreMode = mode
+  profile.restoreRoot = root
+  return next
+}
+
+async function saveWithMutation(buildNext: (current: SettingsData) => SettingsData): Promise<void> {
+  await ensureLoadedUnsafe()
   const current = state.value
   if (!current) {
     return
   }
-  await persist({
-    ...cloneSettings(current),
-    token,
-    masterPassword,
+  const rollback = cloneSettings(current)
+  const next = buildNext(current)
+  await persistUnsafe(next, rollback)
+}
+
+async function saveCredentials(token: string, masterPassword: string): Promise<void> {
+  await enqueue(async () => {
+    await saveWithMutation((current) => updateCredentials(current, token, masterPassword))
   })
 }
 
 async function updateActiveProfileRestore(mode: 'original' | 'rooted', root: string): Promise<void> {
-  await ensureLoaded()
-  const current = state.value
-  if (!current) {
-    return
-  }
-  const next = cloneSettings(current)
-  const profile = next.profiles.find((item) => item.id === next.activeProfileId)
-  if (!profile) {
-    return
-  }
-  profile.restoreMode = mode
-  profile.restoreRoot = root
-  await persist(next)
+  await enqueue(async () => {
+    await saveWithMutation((current) => updateRestore(current, mode, root))
+  })
+}
+
+async function flushPendingOps(): Promise<void> {
+  await opChain
 }
 
 export function useSettingsStore() {
@@ -93,5 +136,6 @@ export function useSettingsStore() {
     switchActiveProfile,
     saveCredentials,
     updateActiveProfileRestore,
+    flushPendingOps,
   }
 }

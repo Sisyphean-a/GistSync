@@ -3,6 +3,7 @@ package syncflow
 import (
 	"context"
 	"errors"
+	"time"
 
 	"GistSync/internal/settings"
 )
@@ -83,7 +84,10 @@ type ApplySnapshotResult struct {
 }
 
 type Service struct {
-	cloud CloudGateway
+	cloud         CloudGateway
+	manifestCache ManifestCache
+	observer      MetricsObserver
+	cacheTTL      time.Duration
 }
 
 type manifest struct {
@@ -122,5 +126,14 @@ type manifestSnapshotItem struct {
 }
 
 func NewService(cloud CloudGateway) *Service {
-	return &Service{cloud: cloud}
+	return NewServiceWithDeps(cloud, newFileManifestCache(), newMetricsObserver(), 30*time.Second)
+}
+
+func NewServiceWithDeps(cloud CloudGateway, cache ManifestCache, observer MetricsObserver, cacheTTL time.Duration) *Service {
+	return &Service{
+		cloud:         cloud,
+		manifestCache: cache,
+		observer:      observer,
+		cacheTTL:      cacheTTL,
+	}
 }
