@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 const (
@@ -45,6 +46,8 @@ type Client struct {
 	baseURL    string
 	token      string
 	httpClient *http.Client
+	cacheMu    sync.RWMutex
+	manifestID string
 }
 
 type gistFile struct {
@@ -79,6 +82,9 @@ func NewClient(options ClientOptions) (*Client, error) {
 }
 
 func (c *Client) EnsureManifestGist(ctx context.Context) (string, error) {
+	if id, ok := c.cachedManifestID(); ok {
+		return id, nil
+	}
 	gists, err := c.listGists(ctx)
 	if err != nil {
 		return "", err
@@ -86,10 +92,31 @@ func (c *Client) EnsureManifestGist(ctx context.Context) (string, error) {
 
 	for _, gist := range gists {
 		if _, exists := gist.Files[manifestName]; exists {
+			c.setManifestID(gist.ID)
 			return gist.ID, nil
 		}
 	}
-	return c.createManifestGist(ctx)
+	id, err := c.createManifestGist(ctx)
+	if err != nil {
+		return "", err
+	}
+	c.setManifestID(id)
+	return id, nil
+}
+
+func (c *Client) cachedManifestID() (string, bool) {
+	c.cacheMu.RLock()
+	defer c.cacheMu.RUnlock()
+	if c.manifestID == "" {
+		return "", false
+	}
+	return c.manifestID, true
+}
+
+func (c *Client) setManifestID(id string) {
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	c.manifestID = id
 }
 
 func (c *Client) UpsertFile(ctx context.Context, req UpsertFileRequest) error {

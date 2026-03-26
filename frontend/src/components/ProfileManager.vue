@@ -1,19 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import {
   chooseFilesForProfile,
   createProfile,
   deleteProfile,
-  loadSettings,
   pullProfilesFromCloud,
   removeProfileItems,
-  saveSettings,
-  setActiveProfile,
-  type Profile,
-  type SettingsData,
 } from '../lib/backend'
+import { useSettingsStore } from '../composables/useSettingsStore'
 
-const state = ref<SettingsData | null>(null)
+const store = useSettingsStore()
 const profileName = ref('')
 const selectedItemIds = ref<string[]>([])
 const status = ref('')
@@ -22,29 +18,20 @@ const restore = reactive({
   root: '',
 })
 
-const activeProfile = computed<Profile | null>(() => {
-  const current = state.value
-  if (!current) {
-    return null
-  }
-  return current.profiles.find((profile) => profile.id === current.activeProfileId) ?? null
-})
-
 onMounted(async () => {
   await refreshState()
 })
 
 async function refreshState(): Promise<void> {
-  const settings = await loadSettings()
-  state.value = settings
+  await store.refresh()
   selectedItemIds.value = []
-  const profile = activeProfile.value
+  const profile = store.activeProfile.value
   if (!profile) {
     restore.mode = 'original'
     restore.root = ''
     return
   }
-  restore.mode = profile.restoreMode
+  restore.mode = profile.restoreMode as 'original' | 'rooted'
   restore.root = profile.restoreRoot
 }
 
@@ -52,7 +39,7 @@ async function createNewProfile(): Promise<void> {
   try {
     const created = await createProfile(profileName.value)
     profileName.value = ''
-    await setActiveProfile(created.id)
+    await store.switchActiveProfile(created.id)
     await refreshState()
     status.value = `已创建配置: ${created.name || created.id}`
   } catch (error) {
@@ -62,7 +49,7 @@ async function createNewProfile(): Promise<void> {
 
 async function switchProfile(profileId: string): Promise<void> {
   try {
-    await setActiveProfile(profileId)
+    await store.switchActiveProfile(profileId)
     await refreshState()
     status.value = ''
   } catch (error) {
@@ -91,12 +78,13 @@ async function removeProfile(profileId: string): Promise<void> {
 }
 
 async function addFiles(): Promise<void> {
-  if (!activeProfile.value) {
+  const profile = store.activeProfile.value
+  if (!profile) {
     status.value = '请先创建或选择配置'
     return
   }
   try {
-    const selected = await chooseFilesForProfile(activeProfile.value.id)
+    const selected = await chooseFilesForProfile(profile.id)
     await refreshState()
     status.value = selected.length === 0 ? '未选择文件' : `已添加 ${selected.length} 个文件`
   } catch (error) {
@@ -105,11 +93,12 @@ async function addFiles(): Promise<void> {
 }
 
 async function removeSelectedItems(): Promise<void> {
-  if (!activeProfile.value || selectedItemIds.value.length === 0) {
+  const profile = store.activeProfile.value
+  if (!profile || selectedItemIds.value.length === 0) {
     return
   }
   try {
-    await removeProfileItems(activeProfile.value.id, selectedItemIds.value)
+    await removeProfileItems(profile.id, selectedItemIds.value)
     await refreshState()
     status.value = '已移除选中文件'
   } catch (error) {
@@ -118,17 +107,8 @@ async function removeSelectedItems(): Promise<void> {
 }
 
 async function persistRestoreSettings(): Promise<void> {
-  if (!state.value || !activeProfile.value) {
-    return
-  }
-  const profile = state.value.profiles.find((item) => item.id === activeProfile.value?.id)
-  if (!profile) {
-    return
-  }
-  profile.restoreMode = restore.mode
-  profile.restoreRoot = restore.root
   try {
-    await saveSettings(state.value)
+    await store.updateActiveProfileRestore(restore.mode, restore.root)
   } catch (error) {
     status.value = `保存恢复策略失败: ${String(error)}`
   }
@@ -142,7 +122,7 @@ async function persistRestoreSettings(): Promise<void> {
         <div class="mb-4 flex items-center justify-between gap-2 border-b border-slate-200 pb-3">
           <h2 class="text-base font-semibold text-slate-900">配置集</h2>
           <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-            {{ state?.profiles?.length || 0 }} 组
+            {{ store.state.value?.profiles?.length || 0 }} 组
           </span>
         </div>
 
@@ -163,10 +143,10 @@ async function persistRestoreSettings(): Promise<void> {
 
         <div class="max-h-[320px] space-y-2 overflow-auto pr-1">
           <button
-            v-for="profile in state?.profiles || []"
+            v-for="profile in store.state.value?.profiles || []"
             :key="profile.id"
             class="w-full rounded-xl border px-3 py-2 text-left text-sm transition"
-            :class="profile.id === state?.activeProfileId ? 'border-slate-900 bg-slate-100 text-slate-900' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'"
+            :class="profile.id === store.state.value?.activeProfileId ? 'border-slate-900 bg-slate-100 text-slate-900' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'"
             @click="switchProfile(profile.id)"
           >
             <div class="flex items-center justify-between gap-2">
@@ -177,9 +157,9 @@ async function persistRestoreSettings(): Promise<void> {
         </div>
 
         <button
-          v-if="activeProfile"
+          v-if="store.activeProfile.value"
           class="mt-4 h-10 w-full rounded-lg bg-rose-700 px-4 text-sm font-medium text-white hover:bg-rose-600"
-          @click="removeProfile(activeProfile.id)"
+          @click="removeProfile(store.activeProfile.value.id)"
         >
           删除当前配置
         </button>
@@ -227,12 +207,12 @@ async function persistRestoreSettings(): Promise<void> {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in activeProfile?.items || []" :key="item.id" class="border-t border-slate-200">
+            <tr v-for="item in store.activeProfile.value?.items || []" :key="item.id" class="border-t border-slate-200">
               <td class="px-3 py-2"><input v-model="selectedItemIds" :value="item.id" type="checkbox"></td>
               <td class="px-3 py-2 font-mono text-xs text-slate-700">{{ item.sourcePathTemplate }}</td>
               <td class="px-3 py-2 font-mono text-xs text-slate-700">{{ item.relativePath }}</td>
             </tr>
-            <tr v-if="(activeProfile?.items?.length || 0) === 0">
+            <tr v-if="(store.activeProfile.value?.items?.length || 0) === 0">
               <td colspan="3" class="px-3 py-8 text-center text-sm text-slate-500">当前配置还没有文件，点击“添加文件（多选）”开始。</td>
             </tr>
           </tbody>

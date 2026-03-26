@@ -1,21 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import ConflictResolverDialog from './ConflictResolverDialog.vue'
 import {
   applySnapshot,
   listSnapshots,
-  loadSettings,
   previewApplyConflicts,
-  setActiveProfile,
   uploadProfile,
   type ApplyConflict,
   type ApplySnapshotRequest,
-  type Profile,
-  type SettingsData,
   type SnapshotMeta,
 } from '../lib/backend'
+import { useSettingsStore } from '../composables/useSettingsStore'
 
-const state = ref<SettingsData | null>(null)
+const store = useSettingsStore()
 const snapshots = ref<SnapshotMeta[]>([])
 const selectedSnapshotId = ref('')
 const selectedUploadItemIds = ref<string[]>([])
@@ -26,22 +23,13 @@ const conflictVisible = ref(false)
 const conflicts = ref<ApplyConflict[]>([])
 const pendingApplyRequest = ref<ApplySnapshotRequest | null>(null)
 
-const activeProfile = computed<Profile | null>(() => {
-  const current = state.value
-  if (!current) {
-    return null
-  }
-  return current.profiles.find((profile) => profile.id === current.activeProfileId) ?? null
-})
-
 onMounted(async () => {
   await refreshState()
 })
 
 async function refreshState(): Promise<void> {
-  const settings = await loadSettings()
-  state.value = settings
-  const profile = activeProfile.value
+  await store.refresh()
+  const profile = store.activeProfile.value
   if (!profile) {
     snapshots.value = []
     selectedSnapshotId.value = ''
@@ -67,7 +55,7 @@ async function refreshSnapshots(profileId: string): Promise<void> {
 
 async function switchProfile(profileId: string): Promise<void> {
   try {
-    await setActiveProfile(profileId)
+    await store.switchActiveProfile(profileId)
     await refreshState()
     status.value = ''
   } catch (error) {
@@ -76,7 +64,8 @@ async function switchProfile(profileId: string): Promise<void> {
 }
 
 async function uploadSelectedItems(): Promise<void> {
-  if (!activeProfile.value) {
+  const profile = store.activeProfile.value
+  if (!profile) {
     status.value = '请先选择配置集'
     return
   }
@@ -86,8 +75,8 @@ async function uploadSelectedItems(): Promise<void> {
   }
   loading.value = true
   try {
-    const result = await uploadProfile(activeProfile.value.id, selectedUploadItemIds.value)
-    await refreshSnapshots(activeProfile.value.id)
+    const result = await uploadProfile(profile.id, selectedUploadItemIds.value)
+    await refreshSnapshots(profile.id)
     status.value = `上传完成：快照 ${result.snapshotId}，文件 ${result.uploaded} 个`
   } catch (error) {
     status.value = `上传失败: ${String(error)}`
@@ -97,7 +86,8 @@ async function uploadSelectedItems(): Promise<void> {
 }
 
 async function startApplyFlow(): Promise<void> {
-  if (!activeProfile.value) {
+  const profile = store.activeProfile.value
+  if (!profile) {
     status.value = '请先选择配置集'
     return
   }
@@ -106,11 +96,11 @@ async function startApplyFlow(): Promise<void> {
     return
   }
   const request: ApplySnapshotRequest = {
-    profileId: activeProfile.value.id,
+    profileId: profile.id,
     snapshotId: selectedSnapshotId.value,
     masterPassword: '',
-    restoreMode: activeProfile.value.restoreMode,
-    restoreRoot: activeProfile.value.restoreRoot,
+    restoreMode: profile.restoreMode,
+    restoreRoot: profile.restoreRoot,
     selectedItemIds: selectedRestoreItemIds.value,
     overwriteItemIds: [],
   }
@@ -173,11 +163,11 @@ function closeConflictDialog(): void {
         <label class="text-sm text-slate-700">
           <span class="mb-1 block font-medium">当前配置集</span>
           <select
-            :value="state?.activeProfileId || ''"
+            :value="store.state.value?.activeProfileId || ''"
             class="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
             @change="switchProfile(($event.target as HTMLSelectElement).value)"
           >
-            <option v-for="profile in state?.profiles || []" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
+            <option v-for="profile in store.state.value?.profiles || []" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
           </select>
         </label>
         <label class="text-sm text-slate-700">
@@ -197,7 +187,7 @@ function closeConflictDialog(): void {
         <h3 class="mb-3 text-sm font-semibold text-slate-900">上传到云端（可选择条目）</h3>
         <div class="mb-3 max-h-[320px] overflow-auto rounded-lg border border-slate-200 p-2">
           <div class="grid gap-2">
-            <label v-for="item in activeProfile?.items || []" :key="`upload-${item.id}`" class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <label v-for="item in store.activeProfile.value?.items || []" :key="`upload-${item.id}`" class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
               <input v-model="selectedUploadItemIds" :value="item.id" type="checkbox">
               <span class="truncate">{{ item.relativePath || item.sourcePathTemplate }}</span>
             </label>
@@ -212,7 +202,7 @@ function closeConflictDialog(): void {
         <h3 class="mb-3 text-sm font-semibold text-slate-900">从云端恢复（可选择条目）</h3>
         <div class="mb-3 max-h-[320px] overflow-auto rounded-lg border border-slate-200 p-2">
           <div class="grid gap-2">
-            <label v-for="item in activeProfile?.items || []" :key="`restore-${item.id}`" class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <label v-for="item in store.activeProfile.value?.items || []" :key="`restore-${item.id}`" class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
               <input v-model="selectedRestoreItemIds" :value="item.id" type="checkbox">
               <span class="truncate">{{ item.relativePath || item.sourcePathTemplate }}</span>
             </label>

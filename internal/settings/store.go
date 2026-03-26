@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"GistSync/internal/profileutil"
 )
 
 const (
@@ -162,11 +164,7 @@ func migrateLegacy(data Data) Data {
 }
 
 func buildRelativePath(sourcePath string) string {
-	path := strings.ReplaceAll(sourcePath, "\\", "/")
-	path = strings.TrimPrefix(path, "{{HOME}}/")
-	path = strings.TrimPrefix(path, "/")
-	path = strings.ReplaceAll(path, ":", "")
-	return path
+	return profileutil.NormalizeRelativePath(sourcePath)
 }
 
 func autoProfileName() string {
@@ -174,7 +172,7 @@ func autoProfileName() string {
 }
 
 func generateID(prefix string) string {
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	return profileutil.GenerateID(prefix)
 }
 
 func IsValidRestoreMode(mode string) bool {
