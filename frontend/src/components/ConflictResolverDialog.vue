@@ -5,6 +5,7 @@ import type { ApplyConflict } from '../lib/backend'
 const props = defineProps<{
   visible: boolean
   conflicts: ApplyConflict[]
+  defaultOverwriteAll?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -21,7 +22,7 @@ watch(
       return
     }
     for (const conflict of props.conflicts) {
-      decisions[conflict.itemId] = false
+      decisions[conflict.itemId] = props.defaultOverwriteAll ?? false
     }
   },
   { deep: true, immediate: true },
@@ -47,7 +48,7 @@ function confirm(): void {
     <div class="w-full max-w-3xl rounded-xl border border-slate-300 bg-white shadow-xl">
       <div class="border-b border-slate-200 px-5 py-4">
         <h3 class="text-base font-semibold text-slate-900">检测到冲突文件</h3>
-        <p class="mt-1 text-sm text-slate-600">默认全部跳过。仅显式选择覆盖的文件会被写入本地。</p>
+        <p class="mt-1 text-sm text-slate-600">默认全部覆盖。你可以取消勾选单项，避免覆盖特定文件。</p>
       </div>
       <div class="px-5 py-4">
         <div class="mb-3 flex flex-wrap gap-2">

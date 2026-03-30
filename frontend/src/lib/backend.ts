@@ -7,6 +7,8 @@ import {
   LoadSettingsV2,
   PreviewApplyConflicts,
   PullProfilesFromCloud,
+  QuickDownload,
+  QuickUpload,
   RemoveProfileItems,
   SaveSettingsV2,
   SetActiveProfile,
@@ -75,6 +77,44 @@ export interface ApplySnapshotResult {
 export interface UploadProfileResult {
   snapshotId: string
   uploaded: number
+}
+
+export type QuickConflictPolicy = 'overwrite_all' | 'manual'
+
+export interface QuickUploadRequest {
+  profileId: string
+}
+
+export interface QuickDownloadRequest {
+  profileId: string
+  conflictPolicy: QuickConflictPolicy
+  overwriteItemIds: string[]
+}
+
+export interface QuickOperationSummary {
+  uploaded: number
+  applied: number
+  skipped: number
+  conflicts: number
+  errors: number
+}
+
+export interface QuickOperationItem {
+  itemId: string
+  targetPath: string
+  status: string
+  reason: string
+}
+
+export interface QuickOperationResult {
+  operationId: string
+  action: string
+  profileId: string
+  snapshotId: string
+  requiresConflictResolution: boolean
+  summary: QuickOperationSummary
+  conflicts: QuickOperationItem[]
+  items: QuickOperationItem[]
 }
 
 function mapProfileItem(item: settings.ProfileItem): ProfileItem {
@@ -162,3 +202,5 @@ export const previewApplyConflicts = async (req: ApplySnapshotRequest): Promise<
 export const applySnapshot = async (req: ApplySnapshotRequest): Promise<ApplySnapshotResult> =>
   mapApplyResult(await ApplySnapshot(toApplyRequestModel(req)))
 export const pullProfilesFromCloud = async (): Promise<number> => PullProfilesFromCloud()
+export const quickUpload = async (req: QuickUploadRequest): Promise<QuickOperationResult> => QuickUpload(req)
+export const quickDownload = async (req: QuickDownloadRequest): Promise<QuickOperationResult> => QuickDownload(req)

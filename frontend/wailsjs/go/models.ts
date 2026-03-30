@@ -1,3 +1,119 @@
+export namespace appsvc {
+	
+	export class QuickDownloadRequest {
+	    profileId: string;
+	    conflictPolicy: string;
+	    overwriteItemIds: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new QuickDownloadRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.profileId = source["profileId"];
+	        this.conflictPolicy = source["conflictPolicy"];
+	        this.overwriteItemIds = source["overwriteItemIds"];
+	    }
+	}
+	export class QuickOperationItem {
+	    itemId: string;
+	    targetPath: string;
+	    status: string;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuickOperationItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.itemId = source["itemId"];
+	        this.targetPath = source["targetPath"];
+	        this.status = source["status"];
+	        this.reason = source["reason"];
+	    }
+	}
+	export class QuickOperationSummary {
+	    uploaded: number;
+	    applied: number;
+	    skipped: number;
+	    conflicts: number;
+	    errors: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuickOperationSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uploaded = source["uploaded"];
+	        this.applied = source["applied"];
+	        this.skipped = source["skipped"];
+	        this.conflicts = source["conflicts"];
+	        this.errors = source["errors"];
+	    }
+	}
+	export class QuickOperationResult {
+	    operationId: string;
+	    action: string;
+	    profileId: string;
+	    snapshotId: string;
+	    requiresConflictResolution: boolean;
+	    summary: QuickOperationSummary;
+	    conflicts: QuickOperationItem[];
+	    items: QuickOperationItem[];
+	
+	    static createFrom(source: any = {}) {
+	        return new QuickOperationResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.operationId = source["operationId"];
+	        this.action = source["action"];
+	        this.profileId = source["profileId"];
+	        this.snapshotId = source["snapshotId"];
+	        this.requiresConflictResolution = source["requiresConflictResolution"];
+	        this.summary = this.convertValues(source["summary"], QuickOperationSummary);
+	        this.conflicts = this.convertValues(source["conflicts"], QuickOperationItem);
+	        this.items = this.convertValues(source["items"], QuickOperationItem);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class QuickUploadRequest {
+	    profileId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuickUploadRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.profileId = source["profileId"];
+	    }
+	}
+
+}
+
 export namespace settings {
 	
 	export class ProfileItem {

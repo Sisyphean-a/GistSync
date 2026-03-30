@@ -95,6 +95,14 @@ func (a *App) ApplySnapshot(req syncflow.ApplySnapshotRequest) (syncflow.ApplySn
 	return a.svc.ApplySnapshot(a.ctx, req)
 }
 
+func (a *App) QuickUpload(req appsvc.QuickUploadRequest) (appsvc.QuickOperationResult, error) {
+	return a.svc.QuickUpload(a.ctx, req)
+}
+
+func (a *App) QuickDownload(req appsvc.QuickDownloadRequest) (appsvc.QuickOperationResult, error) {
+	return a.svc.QuickDownload(a.ctx, req)
+}
+
 func (a *App) UploadSync() (string, error) {
 	return a.svc.UploadSync(a.ctx)
 }

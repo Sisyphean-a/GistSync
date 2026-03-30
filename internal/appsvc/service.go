@@ -46,6 +46,8 @@ type SyncOrchestrator interface {
 	ApplySnapshot(ctx context.Context, req syncflow.ApplySnapshotRequest) (syncflow.ApplySnapshotResult, error)
 	UploadSync(ctx context.Context) (string, error)
 	DownloadSync(ctx context.Context, overwrite bool) (string, error)
+	QuickUpload(ctx context.Context, req QuickUploadRequest) (QuickOperationResult, error)
+	QuickDownload(ctx context.Context, req QuickDownloadRequest) (QuickOperationResult, error)
 }
 
 type Service struct {

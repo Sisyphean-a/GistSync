@@ -29,3 +29,11 @@ func (s *Service) UploadSync(ctx context.Context) (string, error) {
 func (s *Service) DownloadSync(ctx context.Context, overwrite bool) (string, error) {
 	return s.syncer.DownloadSync(ctx, overwrite)
 }
+
+func (s *Service) QuickUpload(ctx context.Context, req QuickUploadRequest) (QuickOperationResult, error) {
+	return s.syncer.QuickUpload(ctx, req)
+}
+
+func (s *Service) QuickDownload(ctx context.Context, req QuickDownloadRequest) (QuickOperationResult, error) {
+	return s.syncer.QuickDownload(ctx, req)
+}

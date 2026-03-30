@@ -50,6 +50,14 @@ export function PullProfilesFromCloud() {
   return window['go']['main']['App']['PullProfilesFromCloud']();
 }
 
+export function QuickDownload(arg1) {
+  return window['go']['main']['App']['QuickDownload'](arg1);
+}
+
+export function QuickUpload(arg1) {
+  return window['go']['main']['App']['QuickUpload'](arg1);
+}
+
 export function RemoveProfileItems(arg1, arg2) {
   return window['go']['main']['App']['RemoveProfileItems'](arg1, arg2);
 }
