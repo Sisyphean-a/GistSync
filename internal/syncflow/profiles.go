@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 
+	"GistSync/internal/pathmap"
 	"GistSync/internal/settings"
 )
 
@@ -22,10 +23,11 @@ func (s *Service) ListProfilesFromCloud(ctx context.Context) ([]settings.Profile
 func toSettingsProfile(profile manifestProfile) settings.Profile {
 	items := make([]settings.ProfileItem, 0, len(profile.Items))
 	for _, item := range profile.Items {
+		templatePath := pathmap.CompactHomePath(item.SourcePathTemplate)
 		items = append(items, settings.ProfileItem{
 			ID:                 item.ID,
-			SourcePathTemplate: item.SourcePathTemplate,
-			RelativePath:       item.RelativePath,
+			SourcePathTemplate: templatePath,
+			RelativePath:       resolveRelativePath(templatePath, item.RelativePath),
 			Enabled:            item.Enabled,
 		})
 	}

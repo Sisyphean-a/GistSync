@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"GistSync/internal/pathmap"
 	"GistSync/internal/settings"
 )
 
@@ -66,10 +67,11 @@ func (s *Service) saveManifest(ctx context.Context, gistID string, data manifest
 func (m *manifest) upsertProfile(profile settings.Profile) {
 	entry := manifestProfile{ID: profile.ID, Name: profile.Name, RestoreMode: profile.RestoreMode, RestoreRoot: profile.RestoreRoot}
 	for _, item := range profile.Items {
+		templatePath := pathmap.CompactHomePath(item.SourcePathTemplate)
 		entry.Items = append(entry.Items, manifestProfileItem{
 			ID:                 item.ID,
-			SourcePathTemplate: item.SourcePathTemplate,
-			RelativePath:       normalizeRelative(item),
+			SourcePathTemplate: templatePath,
+			RelativePath:       resolveRelativePath(templatePath, item.RelativePath),
 			Enabled:            item.Enabled,
 		})
 	}

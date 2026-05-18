@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"GistSync/internal/pathmap"
 	"GistSync/internal/profileutil"
 )
 
@@ -272,6 +273,8 @@ func applyDefaults(data Data) Data {
 		}
 		for j := range profile.Items {
 			item := &profile.Items[j]
+			item.SourcePathTemplate = pathmap.CompactHomePath(item.SourcePathTemplate)
+			item.RelativePath = buildRelativePath(item.SourcePathTemplate)
 			if item.ID == "" {
 				item.ID = generateID("item")
 			}

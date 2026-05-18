@@ -40,3 +40,20 @@ func TestExpandHomePath_EmptyInput(t *testing.T) {
 		t.Fatalf("expected error for empty input")
 	}
 }
+
+func TestCompactHomePath_ReplacesSiblingUserHomeWithPlaceholder(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("failed to get home dir: %v", err)
+	}
+	if filepath.Dir(homeDir) == homeDir {
+		t.Skip("home dir does not have a parent user directory")
+	}
+
+	input := filepath.Join(filepath.Dir(homeDir), "Fusi", ".ssh", "config")
+	got := CompactHomePath(input)
+	want := "{{HOME}}/.ssh/config"
+	if got != want {
+		t.Fatalf("compact path mismatch: got %q want %q", got, want)
+	}
+}

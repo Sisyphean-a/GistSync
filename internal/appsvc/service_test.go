@@ -3,6 +3,8 @@ package appsvc
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"GistSync/internal/settings"
@@ -71,6 +73,33 @@ func TestService_AddFilesToProfile_NormalizesRelativePath(t *testing.T) {
 	}
 	item := store.data.Profiles[0].Items[0]
 	if item.RelativePath != "Users/me/.gitconfig" {
+		t.Fatalf("relative path mismatch: %q", item.RelativePath)
+	}
+}
+
+func TestService_AddFilesToProfile_UsesHomePlaceholder(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("failed to get home dir: %v", err)
+	}
+	if filepath.Dir(homeDir) == homeDir {
+		t.Skip("home dir does not have a parent user directory")
+	}
+
+	store := &fakeStore{data: settings.Data{Profiles: []settings.Profile{{ID: "p1", Items: []settings.ProfileItem{}}}}}
+	svc := NewServiceWithDeps(store, defaultSyncFactory, func(prefix string) string { return prefix + "-id" })
+	sourcePath := filepath.Join(filepath.Dir(homeDir), "Fusi", ".gitconfig")
+
+	err = svc.AddFilesToProfile(context.Background(), "p1", []string{sourcePath})
+	if err != nil {
+		t.Fatalf("AddFilesToProfile returned error: %v", err)
+	}
+
+	item := store.data.Profiles[0].Items[0]
+	if item.SourcePathTemplate != "{{HOME}}/.gitconfig" {
+		t.Fatalf("source path template mismatch: %q", item.SourcePathTemplate)
+	}
+	if item.RelativePath != ".gitconfig" {
 		t.Fatalf("relative path mismatch: %q", item.RelativePath)
 	}
 }

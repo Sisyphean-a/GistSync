@@ -56,7 +56,8 @@ func (s *Service) uploadItem(
 	if !isSelected(item.ID, selectedSet) || !item.Enabled {
 		return nil, nil
 	}
-	absolutePath, resolveErr := pathmap.ExpandHomePath(item.SourcePathTemplate)
+	templatePath := pathmap.CompactHomePath(item.SourcePathTemplate)
+	absolutePath, resolveErr := pathmap.ExpandHomePath(templatePath)
 	if resolveErr != nil {
 		return nil, resolveErr
 	}
@@ -74,8 +75,8 @@ func (s *Service) uploadItem(
 	}
 	return &manifestSnapshotItem{
 		ItemID:             item.ID,
-		SourcePathTemplate: item.SourcePathTemplate,
-		RelativePath:       normalizeRelative(item),
+		SourcePathTemplate: templatePath,
+		RelativePath:       resolveRelativePath(templatePath, item.RelativePath),
 		BlobFile:           blob,
 	}, nil
 }

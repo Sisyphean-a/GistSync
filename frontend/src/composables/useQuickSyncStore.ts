@@ -5,12 +5,11 @@ import {
   type ApplyConflict,
   type QuickOperationResult,
 } from '../lib/backend'
+import { describeSyncActivity, type SyncActivity } from '../lib/syncActivity'
 import { useSettingsStore } from './useSettingsStore'
 
-type BusyAction = '' | 'download' | 'upload'
-
 const settingsStore = useSettingsStore()
-const busyAction = ref<BusyAction>('')
+const activity = ref<SyncActivity>('')
 const status = ref('')
 const lastResult = ref<QuickOperationResult | null>(null)
 const showResultDetails = ref(false)
@@ -25,7 +24,14 @@ async function initialize(): Promise<void> {
 }
 
 async function switchProfile(profileId: string): Promise<void> {
-  await settingsStore.switchActiveProfile(profileId)
+  activity.value = 'switching_profile'
+  status.value = describeSyncActivity(activity.value)
+  try {
+    await settingsStore.switchActiveProfile(profileId)
+    status.value = ''
+  } finally {
+    activity.value = ''
+  }
 }
 
 async function upload(): Promise<void> {
@@ -33,7 +39,8 @@ async function upload(): Promise<void> {
     status.value = '请先选择配置集'
     return
   }
-  busyAction.value = 'upload'
+  activity.value = 'uploading'
+  status.value = describeSyncActivity(activity.value)
   try {
     const result = await quickUpload({ profileId: selectedProfileId.value })
     lastResult.value = result
@@ -42,7 +49,7 @@ async function upload(): Promise<void> {
   } catch (error) {
     status.value = `上传失败: ${String(error)}`
   } finally {
-    busyAction.value = ''
+    activity.value = ''
   }
 }
 
@@ -51,7 +58,8 @@ async function download(): Promise<void> {
     status.value = '请先选择配置集'
     return
   }
-  busyAction.value = 'download'
+  activity.value = 'downloading'
+  status.value = describeSyncActivity(activity.value)
   try {
     const result = await quickDownload({
       profileId: selectedProfileId.value,
@@ -70,7 +78,7 @@ async function download(): Promise<void> {
   } catch (error) {
     status.value = `下载失败: ${String(error)}`
   } finally {
-    busyAction.value = ''
+    activity.value = ''
   }
 }
 
@@ -78,7 +86,8 @@ async function submitConflictDecision(overwriteItemIds: string[]): Promise<void>
   if (!selectedProfileId.value) {
     return
   }
-  busyAction.value = 'download'
+  activity.value = 'applying_snapshot'
+  status.value = describeSyncActivity(activity.value)
   try {
     const result = await quickDownload({
       profileId: selectedProfileId.value,
@@ -93,7 +102,7 @@ async function submitConflictDecision(overwriteItemIds: string[]): Promise<void>
   } catch (error) {
     status.value = `下载失败: ${String(error)}`
   } finally {
-    busyAction.value = ''
+    activity.value = ''
   }
 }
 
@@ -110,7 +119,7 @@ export function useQuickSyncStore() {
   return {
     selectedProfileId,
     profiles,
-    busyAction,
+    activity,
     status,
     lastResult,
     showResultDetails,

@@ -74,16 +74,25 @@ func resolveTargetPath(item manifestSnapshotItem, mode string, restoreRoot strin
 		if empty(restoreRoot) {
 			return "", ErrEmptyRestoreRoot
 		}
-		return filepath.Join(restoreRoot, filepath.FromSlash(item.RelativePath)), nil
+		return filepath.Join(restoreRoot, filepath.FromSlash(resolveRelativePath(item.SourcePathTemplate, item.RelativePath))), nil
 	}
-	return pathmap.ExpandHomePath(item.SourcePathTemplate)
+	return pathmap.ExpandHomePath(pathmap.CompactHomePath(item.SourcePathTemplate))
 }
 
 func normalizeRelative(item settings.ProfileItem) string {
-	if !empty(item.RelativePath) {
-		return item.RelativePath
+	return resolveRelativePath(item.SourcePathTemplate, item.RelativePath)
+}
+
+func resolveRelativePath(sourcePathTemplate string, relativePath string) string {
+	templatePath := pathmap.CompactHomePath(sourcePathTemplate)
+	normalized := profileutil.NormalizeRelativePath(templatePath)
+	if !empty(normalized) {
+		return normalized
 	}
-	return profileutil.NormalizeRelativePath(item.SourcePathTemplate)
+	if !empty(relativePath) {
+		return relativePath
+	}
+	return profileutil.NormalizeRelativePath(sourcePathTemplate)
 }
 
 func chooseRestoreMode(requested string, profileDefault string) string {

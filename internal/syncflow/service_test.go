@@ -235,6 +235,67 @@ func TestService_ApplySnapshotRootedMode(t *testing.T) {
 	}
 }
 
+func TestService_ApplySnapshotOriginalMode_MapsForeignHomePathToCurrentHome(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("failed to get home dir: %v", err)
+	}
+	if filepath.Dir(homeDir) == homeDir {
+		t.Skip("home dir does not have a parent user directory")
+	}
+
+	cloud := newFakeCloud()
+	service := NewService(cloud)
+	enc, err := securityEncrypt("hello", "pwd")
+	if err != nil {
+		t.Fatalf("encrypt helper failed: %v", err)
+	}
+	targetPath := filepath.Join(homeDir, ".ssh", "config")
+	if err = os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		t.Fatalf("prepare target dir failed: %v", err)
+	}
+	if err = os.Remove(targetPath); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("cleanup target path failed: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(targetPath) })
+
+	foreignPath := filepath.Join(filepath.Dir(homeDir), "Fusi", ".ssh", "config")
+	manifestData := manifest{
+		Version: 2,
+		Profiles: []manifestProfile{
+			{ID: "p1", Name: "P1", RestoreMode: restoreOriginal, Items: []manifestProfileItem{}},
+		},
+		Snapshots: []manifestSnapshot{
+			{
+				ID: "s1", ProfileID: "p1", CreatedAt: "2026-03-24T11:00:00Z",
+				Items: []manifestSnapshotItem{
+					{ItemID: "i1", SourcePathTemplate: foreignPath, RelativePath: "Users/Fusi/.ssh/config", BlobFile: "blob1.enc"},
+				},
+			},
+		},
+	}
+	raw, _ := json.Marshal(manifestData)
+	cloud.files[manifestFileName] = string(raw)
+	cloud.files["blob1.enc"] = enc
+
+	result, err := service.ApplySnapshot(context.Background(), ApplySnapshotRequest{
+		ProfileID: "p1", SnapshotID: "s1", MasterPassword: "pwd",
+	})
+	if err != nil {
+		t.Fatalf("ApplySnapshot returned error: %v", err)
+	}
+	if result.Applied != 1 {
+		t.Fatalf("expected apply count 1, got %d", result.Applied)
+	}
+	out, readErr := os.ReadFile(targetPath)
+	if readErr != nil {
+		t.Fatalf("read target file failed: %v", readErr)
+	}
+	if string(out) != "hello" {
+		t.Fatalf("unexpected content: %q", string(out))
+	}
+}
+
 func TestService_ApplySnapshot_WithSelectedItemIDs(t *testing.T) {
 	cloud := newFakeCloud()
 	service := NewService(cloud)

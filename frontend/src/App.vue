@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import ConflictResolverDialog from './components/ConflictResolverDialog.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import SyncCenter from './components/SyncCenter.vue'
 import ProfileManager from './components/ProfileManager.vue'
 import { useQuickSyncStore } from './composables/useQuickSyncStore'
+import {
+  describeSyncActivity,
+  isBusyActivity,
+  quickDownloadButtonLabel,
+  quickUploadButtonLabel,
+} from './lib/syncActivity'
 
 type AdvancedTab = 'sync' | 'profiles' | 'settings'
 
@@ -12,7 +18,7 @@ const quickStore = useQuickSyncStore()
 const {
   selectedProfileId,
   profiles,
-  busyAction,
+  activity,
   status,
   lastResult,
   showResultDetails,
@@ -28,6 +34,12 @@ const {
 } = quickStore
 const advancedVisible = ref(false)
 const advancedTab = ref<AdvancedTab>('sync')
+const busy = computed(() => isBusyActivity(activity.value))
+const busyDescription = computed(() => describeSyncActivity(activity.value))
+const uploadButtonLabel = computed(() => quickUploadButtonLabel(activity.value))
+const downloadButtonLabel = computed(() => quickDownloadButtonLabel(activity.value))
+const downloadBusy = computed(() => activity.value === 'downloading' || activity.value === 'applying_snapshot')
+const uploadBusy = computed(() => activity.value === 'uploading')
 
 onMounted(async () => {
   await initialize()
@@ -60,6 +72,7 @@ function openAdvanced(tab: AdvancedTab): void {
           <select
             :value="selectedProfileId"
             class="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+            :disabled="busy"
             @change="switchProfile(($event.target as HTMLSelectElement).value)"
           >
             <option value="" disabled>请选择配置集</option>
@@ -68,16 +81,29 @@ function openAdvanced(tab: AdvancedTab): void {
         </label>
       </section>
 
+      <section v-if="busy" class="rounded-xl border border-sky-200 bg-sky-50 p-4">
+        <div class="flex items-center gap-3">
+          <span class="h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-700" />
+          <div>
+            <p class="text-sm font-semibold text-sky-900">{{ busyDescription }}</p>
+            <p class="text-xs text-sky-700">操作完成后会自动刷新结果，请稍候。</p>
+          </div>
+        </div>
+      </section>
+
       <section class="grid gap-4 lg:grid-cols-2">
         <article class="rounded-xl border border-slate-200 bg-white p-5">
           <h2 class="text-base font-semibold text-slate-900">下载并更新本地配置</h2>
           <p class="mt-2 text-sm text-slate-600">默认使用最新快照；遇到冲突时会弹窗确认，默认全覆盖。</p>
           <button
             class="mt-5 h-11 min-w-[180px] rounded-lg bg-amber-700 px-5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
-            :disabled="busyAction !== ''"
+            :disabled="busy"
             @click="download"
           >
-            一键下载更新
+            <span class="inline-flex items-center gap-2">
+              <span v-if="downloadBusy" class="h-4 w-4 animate-spin rounded-full border-2 border-amber-200 border-t-white" />
+              <span>{{ downloadButtonLabel }}</span>
+            </span>
           </button>
         </article>
 
@@ -86,10 +112,13 @@ function openAdvanced(tab: AdvancedTab): void {
           <p class="mt-2 text-sm text-slate-600">默认上传当前配置集全部启用条目，并生成新快照。</p>
           <button
             class="mt-5 h-11 min-w-[180px] rounded-lg bg-emerald-700 px-5 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
-            :disabled="busyAction !== ''"
+            :disabled="busy"
             @click="upload"
           >
-            一键上传配置
+            <span class="inline-flex items-center gap-2">
+              <span v-if="uploadBusy" class="h-4 w-4 animate-spin rounded-full border-2 border-emerald-200 border-t-white" />
+              <span>{{ uploadButtonLabel }}</span>
+            </span>
           </button>
         </article>
       </section>
@@ -152,6 +181,7 @@ function openAdvanced(tab: AdvancedTab): void {
       :visible="conflictVisible"
       :conflicts="conflicts"
       :default-overwrite-all="true"
+      :submitting="activity === 'applying_snapshot'"
       @close="closeConflictDialog"
       @confirm="submitConflictDecision"
     />

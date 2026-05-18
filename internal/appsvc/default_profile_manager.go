@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"GistSync/internal/pathmap"
 	"GistSync/internal/profileutil"
 	"GistSync/internal/settings"
 	"GistSync/internal/syncflow"
@@ -118,10 +119,11 @@ func (m *DefaultProfileManager) AddFilesToProfile(_ context.Context, profileID s
 		if empty(path) {
 			continue
 		}
+		templatePath := pathmap.CompactHomePath(path)
 		profile.Items = append(profile.Items, settings.ProfileItem{
 			ID:                 m.generateID("item"),
-			SourcePathTemplate: path,
-			RelativePath:       profileutil.NormalizeRelativePath(path),
+			SourcePathTemplate: templatePath,
+			RelativePath:       profileutil.NormalizeRelativePath(templatePath),
 			Enabled:            true,
 		})
 	}
