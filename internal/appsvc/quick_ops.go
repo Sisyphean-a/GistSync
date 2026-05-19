@@ -125,6 +125,7 @@ func mapConflicts(conflicts []syncflow.ApplyConflict) []QuickOperationItem {
 	for _, conflict := range conflicts {
 		items = append(items, QuickOperationItem{
 			ItemID: conflict.ItemID, TargetPath: conflict.TargetPath, Status: "conflict",
+			DiffPreview: conflict.DiffPreview, DiffStatus: conflict.DiffStatus,
 		})
 	}
 	return items

@@ -21,6 +21,7 @@ const profiles = computed(() => settingsStore.state.value?.profiles ?? [])
 
 async function initialize(): Promise<void> {
   await settingsStore.ensureLoaded()
+  await settingsStore.initializeStartupSync()
 }
 
 async function switchProfile(profileId: string): Promise<void> {
@@ -67,7 +68,12 @@ async function download(): Promise<void> {
       overwriteItemIds: [],
     })
     if (result.requiresConflictResolution) {
-      conflicts.value = result.conflicts.map((item) => ({ itemId: item.itemId, targetPath: item.targetPath }))
+      conflicts.value = result.conflicts.map((item) => ({
+        itemId: item.itemId,
+        targetPath: item.targetPath,
+        diffPreview: item.diffPreview || '',
+        diffStatus: item.diffStatus || '',
+      }))
       conflictVisible.value = true
       status.value = `检测到 ${result.summary.conflicts} 个冲突，默认将全部覆盖，可按需修改`
       return

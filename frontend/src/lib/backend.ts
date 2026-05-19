@@ -49,6 +49,8 @@ export interface SnapshotMeta {
 export interface ApplyConflict {
   itemId: string
   targetPath: string
+  diffPreview: string
+  diffStatus: string
 }
 
 export interface ApplySnapshotRequest {
@@ -104,6 +106,8 @@ export interface QuickOperationItem {
   targetPath: string
   status: string
   reason: string
+  diffPreview: string
+  diffStatus: string
 }
 
 export interface QuickOperationResult {
@@ -157,7 +161,12 @@ function mapSnapshot(item: syncflow.SnapshotMeta): SnapshotMeta {
 }
 
 function mapConflict(item: syncflow.ApplyConflict): ApplyConflict {
-  return { itemId: item.itemId, targetPath: item.targetPath }
+  return {
+    itemId: item.itemId,
+    targetPath: item.targetPath,
+    diffPreview: item.diffPreview ?? '',
+    diffStatus: item.diffStatus ?? '',
+  }
 }
 
 function mapApplyItem(item: syncflow.ApplyItemResult): ApplyItemResult {

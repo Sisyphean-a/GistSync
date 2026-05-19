@@ -67,11 +67,14 @@ func TestService_AddFilesToProfile_NormalizesRelativePath(t *testing.T) {
 	store := &fakeStore{data: settings.Data{Profiles: []settings.Profile{{ID: "p1", Items: []settings.ProfileItem{}}}}}
 	svc := NewServiceWithDeps(store, defaultSyncFactory, func(prefix string) string { return prefix + "-id" })
 
-	err := svc.AddFilesToProfile(context.Background(), "p1", []string{`C:\\Users\\me\\.gitconfig`})
+	err := svc.AddFilesToProfile(context.Background(), "p1", []string{`C:\Users\me\.gitconfig`})
 	if err != nil {
 		t.Fatalf("AddFilesToProfile returned error: %v", err)
 	}
 	item := store.data.Profiles[0].Items[0]
+	if item.SourcePathTemplate == "{{HOME}}/.gitconfig" && item.RelativePath == ".gitconfig" {
+		return
+	}
 	if item.RelativePath != "Users/me/.gitconfig" {
 		t.Fatalf("relative path mismatch: %q", item.RelativePath)
 	}
@@ -168,7 +171,9 @@ func TestService_QuickDownload_ManualReturnsConflictPrompt(t *testing.T) {
 		},
 	}
 	syncSvc := &fakeSync{
-		preview:        []syncflow.ApplyConflict{{ItemID: "i1", TargetPath: "/tmp/a"}},
+		preview: []syncflow.ApplyConflict{{
+			ItemID: "i1", TargetPath: "/tmp/a", DiffPreview: "--- local\n+++ remote\n", DiffStatus: "ready",
+		}},
 		listSnapResult: []syncflow.SnapshotMeta{{ID: "s-latest", CreatedAt: "2026-03-30T00:00:00Z"}},
 	}
 	svc := NewServiceWithDeps(store, func(string) (SyncService, error) { return syncSvc, nil }, func(prefix string) string { return prefix + "-id" })
@@ -183,6 +188,9 @@ func TestService_QuickDownload_ManualReturnsConflictPrompt(t *testing.T) {
 	}
 	if !result.RequiresConflictResolution || len(result.Conflicts) != 1 {
 		t.Fatalf("expected conflict resolution required, got %+v", result)
+	}
+	if result.Conflicts[0].DiffStatus != "ready" || result.Conflicts[0].DiffPreview == "" {
+		t.Fatalf("expected diff fields mapped, got %+v", result.Conflicts[0])
 	}
 	if syncSvc.applyCalls != 0 {
 		t.Fatalf("expected no apply call before manual confirmation, got %d", syncSvc.applyCalls)

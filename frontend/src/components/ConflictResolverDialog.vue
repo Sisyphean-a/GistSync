@@ -32,6 +32,7 @@ watch(
 const overwriteItemIds = computed(() => {
   return props.conflicts.filter((conflict) => decisions[conflict.itemId]).map((conflict) => conflict.itemId)
 })
+const expanded = reactive<Record<string, boolean>>({})
 
 function setAll(value: boolean): void {
   for (const conflict of props.conflicts) {
@@ -41,6 +42,27 @@ function setAll(value: boolean): void {
 
 function confirm(): void {
   emit('confirm', overwriteItemIds.value)
+}
+
+function toggleDiff(itemId: string): void {
+  expanded[itemId] = !expanded[itemId]
+}
+
+function diffStatusText(status: string): string {
+  switch (status) {
+    case 'ready':
+      return '可预览'
+    case 'binary_unsupported':
+      return '二进制文件，暂不支持预览'
+    case 'too_large':
+      return '文件过大，暂不展示 diff'
+    case 'decode_failed':
+      return '解密失败，无法展示 diff'
+    case 'read_failed':
+      return '读取失败，无法展示 diff'
+    default:
+      return '无可用 diff'
+  }
 }
 </script>
 
@@ -102,7 +124,24 @@ function confirm(): void {
                 <td class="px-4 py-3 text-center">
                   <input v-model="decisions[conflict.itemId]" :disabled="props.submitting" type="checkbox" class="rounded text-rose-600 focus:ring-rose-500">
                 </td>
-                <td class="px-4 py-3 font-mono text-slate-700 select-all whitespace-normal break-all">{{ conflict.targetPath }}</td>
+                <td class="px-4 py-3 text-slate-700 whitespace-normal break-all">
+                  <div class="font-mono select-all">{{ conflict.targetPath }}</div>
+                  <div class="mt-1 flex items-center gap-2">
+                    <button
+                      v-if="conflict.diffStatus === 'ready'"
+                      type="button"
+                      class="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800"
+                      @click="toggleDiff(conflict.itemId)"
+                    >
+                      {{ expanded[conflict.itemId] ? '收起差异' : '查看差异' }}
+                    </button>
+                    <span v-else class="text-[11px] text-slate-500">{{ diffStatusText(conflict.diffStatus) }}</span>
+                  </div>
+                  <pre
+                    v-if="expanded[conflict.itemId] && conflict.diffStatus === 'ready'"
+                    class="mt-2 max-h-40 overflow-auto rounded border border-slate-200 bg-slate-900 p-2 text-[11px] leading-4 text-slate-100"
+                  >{{ conflict.diffPreview }}</pre>
+                </td>
               </tr>
             </tbody>
           </table>

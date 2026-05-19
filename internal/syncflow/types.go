@@ -56,8 +56,10 @@ type SnapshotMeta struct {
 }
 
 type ApplyConflict struct {
-	ItemID     string `json:"itemId"`
-	TargetPath string `json:"targetPath"`
+	ItemID      string `json:"itemId"`
+	TargetPath  string `json:"targetPath"`
+	DiffPreview string `json:"diffPreview"`
+	DiffStatus  string `json:"diffStatus"`
 }
 
 type ApplySnapshotRequest struct {

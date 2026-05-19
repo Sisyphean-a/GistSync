@@ -21,6 +21,8 @@ export namespace appsvc {
 	    targetPath: string;
 	    status: string;
 	    reason: string;
+	    diffPreview: string;
+	    diffStatus: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new QuickOperationItem(source);
@@ -32,6 +34,8 @@ export namespace appsvc {
 	        this.targetPath = source["targetPath"];
 	        this.status = source["status"];
 	        this.reason = source["reason"];
+	        this.diffPreview = source["diffPreview"];
+	        this.diffStatus = source["diffStatus"];
 	    }
 	}
 	export class QuickOperationSummary {
@@ -223,6 +227,8 @@ export namespace syncflow {
 	export class ApplyConflict {
 	    itemId: string;
 	    targetPath: string;
+	    diffPreview: string;
+	    diffStatus: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ApplyConflict(source);
@@ -232,6 +238,8 @@ export namespace syncflow {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.itemId = source["itemId"];
 	        this.targetPath = source["targetPath"];
+	        this.diffPreview = source["diffPreview"];
+	        this.diffStatus = source["diffStatus"];
 	    }
 	}
 	export class ApplyItemResult {

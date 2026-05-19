@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -368,6 +369,66 @@ func TestService_ApplySnapshot_WithSelectedItemIDs(t *testing.T) {
 	if string(rawA) != "local-a" {
 		t.Fatalf("expected fileA unchanged, got %q", string(rawA))
 	}
+}
+
+func TestService_PreviewApplyConflicts_IncludesTextDiffPreview(t *testing.T) {
+	cloud := newFakeCloud()
+	service := NewService(cloud)
+	rootDir := t.TempDir()
+	targetPath := filepath.Join(rootDir, "config.txt")
+	if err := os.WriteFile(targetPath, []byte("line-1\nlocal-line\n"), 0o600); err != nil {
+		t.Fatalf("write local file failed: %v", err)
+	}
+	encrypted, err := securityEncrypt("line-1\nremote-line\n", "pwd")
+	if err != nil {
+		t.Fatalf("encrypt remote content failed: %v", err)
+	}
+	manifestData := manifest{
+		Version: 2,
+		Profiles: []manifestProfile{
+			{ID: "p1", Name: "P1", RestoreMode: restoreRooted, Items: []manifestProfileItem{}},
+		},
+		Snapshots: []manifestSnapshot{
+			{
+				ID: "s1", ProfileID: "p1", CreatedAt: "2026-03-24T11:00:00Z",
+				Items: []manifestSnapshotItem{
+					{ItemID: "i1", SourcePathTemplate: "{{HOME}}/config.txt", RelativePath: "config.txt", BlobFile: "blob1.enc"},
+				},
+			},
+		},
+	}
+	raw, _ := json.Marshal(manifestData)
+	cloud.files[manifestFileName] = string(raw)
+	cloud.files["blob1.enc"] = encrypted
+
+	conflicts, err := service.PreviewApplyConflicts(context.Background(), ApplySnapshotRequest{
+		ProfileID: "p1", SnapshotID: "s1", MasterPassword: "pwd",
+		RestoreMode: restoreRooted, RestoreRoot: rootDir,
+	})
+	if err != nil {
+		t.Fatalf("PreviewApplyConflicts returned error: %v", err)
+	}
+	if len(conflicts) != 1 {
+		t.Fatalf("expected one conflict, got %d", len(conflicts))
+	}
+	if conflicts[0].DiffStatus != "ready" {
+		t.Fatalf("expected diff status ready, got %q", conflicts[0].DiffStatus)
+	}
+	if conflicts[0].DiffPreview == "" {
+		t.Fatalf("expected non-empty diff preview")
+	}
+	if !containsAll(conflicts[0].DiffPreview, []string{"--- local", "+++ remote", "-local-line", "+remote-line"}) {
+		t.Fatalf("unexpected diff preview: %s", conflicts[0].DiffPreview)
+	}
+}
+
+func containsAll(raw string, parts []string) bool {
+	for _, part := range parts {
+		if !strings.Contains(raw, part) {
+			return false
+		}
+	}
+	return true
 }
 
 func securityEncrypt(data string, password string) (string, error) {

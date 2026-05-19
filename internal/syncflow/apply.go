@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Service) PreviewApplyConflicts(ctx context.Context, req ApplySnapshotRequest) ([]ApplyConflict, error) {
-	_, data, err := s.loadManifest(ctx)
+	gistID, data, err := s.loadManifest(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func (s *Service) PreviewApplyConflicts(ctx context.Context, req ApplySnapshotRe
 			return nil, targetErr
 		}
 		if fileExists(targetPath) {
-			conflicts = append(conflicts, ApplyConflict{ItemID: item.ItemID, TargetPath: targetPath})
+			conflicts = append(conflicts, s.buildConflict(ctx, gistID, item, req, targetPath))
 		}
 	}
 	return conflicts, nil

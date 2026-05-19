@@ -43,6 +43,10 @@ const uploadButtonLabel = computed(() => quickUploadButtonLabel(activity.value))
 const downloadButtonLabel = computed(() => quickDownloadButtonLabel(activity.value))
 const downloadBusy = computed(() => activity.value === 'downloading' || activity.value === 'applying_snapshot')
 const uploadBusy = computed(() => activity.value === 'uploading')
+const startupSyncReady = computed(() => settingsStore.startupSyncReady.value)
+const startupSyncBusy = computed(() => settingsStore.snapshotLoading.value)
+const startupSyncError = computed(() => settingsStore.snapshotError.value)
+const quickActionsDisabled = computed(() => busy.value || !selectedProfileId.value || !startupSyncReady.value)
 
 // Credentials status
 const hasToken = computed(() => !!settingsStore.state.value?.token)
@@ -241,14 +245,20 @@ onMounted(async () => {
           <!-- Standard Quick Sync Panels -->
           <div v-else class="space-y-6">
             <!-- Loading active state -->
-            <div v-if="busy" class="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 shadow-sm">
+            <div v-if="startupSyncBusy || busy" class="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 shadow-sm">
               <div class="flex items-center gap-3">
                 <span class="h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
                 <div>
-                  <p class="text-sm font-bold text-indigo-900">{{ busyDescription }}</p>
-                  <p class="text-xs text-indigo-700">这可能需要几秒钟，在此过程中请勿关闭应用。</p>
+                  <p class="text-sm font-bold text-indigo-900">{{ startupSyncBusy ? '正在初始化同步数据...' : busyDescription }}</p>
+                  <p class="text-xs text-indigo-700">
+                    {{ startupSyncBusy ? '启动时正在拉取当前配置与快照，完成前不可执行一键同步。' : '这可能需要几秒钟，在此过程中请勿关闭应用。' }}
+                  </p>
                 </div>
               </div>
+            </div>
+            <div v-if="startupSyncError" class="rounded-2xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+              <p class="text-sm font-bold text-rose-700">初始化同步失败</p>
+              <p class="text-xs text-rose-600 mt-1 whitespace-pre-wrap">{{ startupSyncError }}</p>
             </div>
 
             <!-- Double Columns Operations -->
@@ -269,7 +279,7 @@ onMounted(async () => {
                 
                 <button
                   class="mt-6 h-10 w-full rounded-lg bg-amber-600 hover:bg-amber-700 px-5 text-sm font-semibold text-white transition shadow-sm disabled:opacity-60 flex items-center justify-center gap-2"
-                  :disabled="busy || !selectedProfileId"
+                  :disabled="quickActionsDisabled"
                   @click="download"
                 >
                   <span v-if="downloadBusy" class="h-4 w-4 animate-spin rounded-full border-2 border-amber-200 border-t-white" />
@@ -293,7 +303,7 @@ onMounted(async () => {
 
                 <button
                   class="mt-6 h-10 w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 px-5 text-sm font-semibold text-white transition shadow-sm disabled:opacity-60 flex items-center justify-center gap-2"
-                  :disabled="busy || !selectedProfileId"
+                  :disabled="quickActionsDisabled"
                   @click="upload"
                 >
                   <span v-if="uploadBusy" class="h-4 w-4 animate-spin rounded-full border-2 border-emerald-200 border-t-white" />

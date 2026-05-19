@@ -1,14 +1,20 @@
 import { computed, ref } from 'vue'
 import {
+  listSnapshots,
   loadSettings,
   saveSettings,
   setActiveProfile,
+  type SnapshotMeta,
   type Profile,
   type SettingsData,
 } from '../lib/backend'
 
 const state = ref<SettingsData | null>(null)
 const loading = ref(false)
+const snapshotsByProfile = ref<Record<string, SnapshotMeta[]>>({})
+const snapshotLoading = ref(false)
+const snapshotError = ref('')
+const startupSyncReady = ref(false)
 let opChain: Promise<void> = Promise.resolve()
 
 const activeProfile = computed<Profile | null>(() => {
@@ -44,6 +50,29 @@ async function refreshUnsafe(): Promise<void> {
   }
 }
 
+function getSnapshots(profileId: string): SnapshotMeta[] {
+  return snapshotsByProfile.value[profileId] ?? []
+}
+
+async function refreshSnapshotsUnsafe(profileId: string): Promise<SnapshotMeta[]> {
+  snapshotLoading.value = true
+  snapshotError.value = ''
+  try {
+    const snapshots = await listSnapshots(profileId)
+    snapshotsByProfile.value = {
+      ...snapshotsByProfile.value,
+      [profileId]: snapshots,
+    }
+    startupSyncReady.value = true
+    return snapshots
+  } catch (error) {
+    snapshotError.value = String(error)
+    throw error
+  } finally {
+    snapshotLoading.value = false
+  }
+}
+
 async function refresh(): Promise<void> {
   await enqueue(async () => {
     await refreshUnsafe()
@@ -67,6 +96,23 @@ async function switchActiveProfile(profileId: string): Promise<void> {
   await enqueue(async () => {
     await setActiveProfile(profileId)
     await refreshUnsafe()
+  })
+}
+
+async function refreshSnapshots(profileId: string): Promise<SnapshotMeta[]> {
+  return enqueue(async () => refreshSnapshotsUnsafe(profileId))
+}
+
+async function initializeStartupSync(): Promise<void> {
+  await enqueue(async () => {
+    await ensureLoadedUnsafe()
+    const profileId = state.value?.activeProfileId ?? ''
+    if (!profileId) {
+      startupSyncReady.value = true
+      snapshotError.value = ''
+      return
+    }
+    await refreshSnapshotsUnsafe(profileId)
   })
 }
 
@@ -131,9 +177,16 @@ export function useSettingsStore() {
     state,
     loading,
     activeProfile,
+    snapshotsByProfile,
+    snapshotLoading,
+    snapshotError,
+    startupSyncReady,
     refresh,
     ensureLoaded,
     switchActiveProfile,
+    initializeStartupSync,
+    refreshSnapshots,
+    getSnapshots,
     saveCredentials,
     updateActiveProfileRestore,
     flushPendingOps,

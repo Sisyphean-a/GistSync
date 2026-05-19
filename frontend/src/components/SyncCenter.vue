@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import ConflictResolverDialog from './ConflictResolverDialog.vue'
 import {
   applySnapshot,
-  listSnapshots,
   previewApplyConflicts,
   uploadProfile,
   type ApplyConflict,
@@ -17,6 +16,7 @@ import {
   isBusyActivity,
   type SyncActivity,
 } from '../lib/syncActivity'
+import { formatSnapshotCreatedAt } from '../lib/timeFormat'
 import { useSettingsStore } from '../composables/useSettingsStore'
 
 const store = useSettingsStore()
@@ -33,23 +33,34 @@ const busy = computed(() => isBusyActivity(activity.value))
 const busyDescription = computed(() => describeSyncActivity(activity.value))
 const uploadButtonLabel = computed(() => advancedUploadButtonLabel(activity.value))
 const downloadButtonLabel = computed(() => advancedDownloadButtonLabel(activity.value))
+const snapshotSyncing = computed(() => store.snapshotLoading.value)
+const snapshotSyncError = computed(() => store.snapshotError.value)
+const localizedSnapshots = computed(() =>
+  snapshots.value.map((snapshot) => ({
+    ...snapshot,
+    displayCreatedAt: formatSnapshotCreatedAt(snapshot.createdAt),
+  })),
+)
 
 const uploadKeyword = ref('')
 const restoreKeyword = ref('')
 
 onMounted(async () => {
-  activity.value = 'loading_snapshots'
-  const pendingStatus = describeSyncActivity(activity.value)
-  status.value = pendingStatus
-  try {
-    await refreshState()
-    if (status.value === pendingStatus) {
-      status.value = ''
-    }
-  } finally {
-    activity.value = ''
-  }
+  await refreshState()
 })
+
+watch(
+  () => store.state.value?.activeProfileId ?? '',
+  (profileId) => {
+    if (!profileId) {
+      snapshots.value = []
+      selectedSnapshotId.value = ''
+      return
+    }
+    snapshots.value = store.getSnapshots(profileId)
+    selectedSnapshotId.value = snapshots.value[0]?.id ?? ''
+  },
+)
 
 async function refreshState(): Promise<void> {
   await store.refresh()
@@ -63,17 +74,24 @@ async function refreshState(): Promise<void> {
   }
   selectedUploadItemIds.value = profile.items.map((item) => item.id)
   selectedRestoreItemIds.value = profile.items.map((item) => item.id)
-  await refreshSnapshots(profile.id)
+  snapshots.value = store.getSnapshots(profile.id)
+  selectedSnapshotId.value = snapshots.value[0]?.id ?? ''
 }
 
-async function refreshSnapshots(profileId: string): Promise<void> {
+async function syncSnapshots(profileId: string): Promise<void> {
+  activity.value = 'loading_snapshots'
+  const pendingStatus = describeSyncActivity(activity.value)
+  status.value = pendingStatus
   try {
-    snapshots.value = await listSnapshots(profileId)
+    snapshots.value = await store.refreshSnapshots(profileId)
     selectedSnapshotId.value = snapshots.value[0]?.id ?? ''
+    if (status.value === pendingStatus) {
+      status.value = ''
+    }
   } catch (error) {
-    snapshots.value = []
-    selectedSnapshotId.value = ''
-    status.value = `快照加载失败: ${String(error)}`
+    status.value = `快照同步失败: ${String(error)}`
+  } finally {
+    activity.value = ''
   }
 }
 
@@ -82,13 +100,7 @@ async function switchProfile(profileId: string): Promise<void> {
   status.value = describeSyncActivity(activity.value)
   try {
     await store.switchActiveProfile(profileId)
-    activity.value = 'loading_snapshots'
-    const pendingStatus = describeSyncActivity(activity.value)
-    status.value = pendingStatus
     await refreshState()
-    if (status.value === pendingStatus) {
-      status.value = ''
-    }
   } catch (error) {
     status.value = `切换失败: ${String(error)}`
   } finally {
@@ -110,9 +122,7 @@ async function uploadSelectedItems(): Promise<void> {
   status.value = describeSyncActivity(activity.value)
   try {
     const result = await uploadProfile(profile.id, selectedUploadItemIds.value)
-    activity.value = 'loading_snapshots'
-    status.value = describeSyncActivity(activity.value)
-    await refreshSnapshots(profile.id)
+    await syncSnapshots(profile.id)
     status.value = `上传完成：快照 ${result.snapshotId}，文件 ${result.uploaded} 个`
   } catch (error) {
     status.value = `上传失败: ${String(error)}`
@@ -191,6 +201,15 @@ function closeConflictDialog(): void {
   pendingApplyRequest.value = null
 }
 
+async function manualSyncSnapshots(): Promise<void> {
+  const profileId = store.activeProfile.value?.id
+  if (!profileId) {
+    status.value = '请先选择配置集'
+    return
+  }
+  await syncSnapshots(profileId)
+}
+
 const filteredUploadItems = computed(() => {
   const items = store.activeProfile.value?.items || []
   if (!uploadKeyword.value.trim()) {
@@ -237,13 +256,24 @@ const filteredRestoreItems = computed(() => {
           </select>
         </div>
         <div class="flex flex-col gap-1">
-          <span class="text-xs font-semibold text-slate-500">快照选择（历史归档）</span>
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500">快照选择（历史归档）</span>
+            <button
+              type="button"
+              class="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 disabled:text-slate-400"
+              :disabled="busy || snapshotSyncing"
+              @click="manualSyncSnapshots"
+            >
+              {{ snapshotSyncing ? '同步中...' : '同步快照' }}
+            </button>
+          </div>
           <select v-model="selectedSnapshotId" class="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none" :disabled="busy">
             <option value="" disabled>请选择快照（默认最新）</option>
-            <option v-for="snapshot in snapshots" :key="snapshot.id" :value="snapshot.id">
-              {{ snapshot.createdAt }} - {{ snapshot.id.slice(0, 8) }}...
+            <option v-for="snapshot in localizedSnapshots" :key="snapshot.id" :value="snapshot.id">
+              {{ snapshot.displayCreatedAt }} - {{ snapshot.id.slice(0, 8) }}...
             </option>
           </select>
+          <p v-if="snapshotSyncError" class="text-[11px] text-rose-600">{{ snapshotSyncError }}</p>
         </div>
       </div>
     </article>
