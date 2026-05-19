@@ -45,51 +45,90 @@ function confirm(): void {
 </script>
 
 <template>
-  <div v-if="visible" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-    <div class="w-full max-w-3xl rounded-xl border border-slate-300 bg-white shadow-xl">
-      <div class="border-b border-slate-200 px-5 py-4">
-        <h3 class="text-base font-semibold text-slate-900">检测到冲突文件</h3>
-        <p class="mt-1 text-sm text-slate-600">默认全部覆盖。你可以取消勾选单项，避免覆盖特定文件。</p>
+  <div v-if="visible" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm transition-all duration-300">
+    <div class="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col transform scale-100 transition-all">
+      <!-- Modal Header -->
+      <div class="border-b border-slate-100 bg-slate-50/50 px-6 py-4 flex items-start justify-between">
+        <div>
+          <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-amber-500">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+            检测到本地文件冲突
+          </h3>
+          <p class="mt-1 text-xs text-slate-500">当前准备写入的文件在本地已存在。请选择是否覆盖它们，未勾选的项目将跳过恢复。</p>
+        </div>
+        <button 
+          type="button" 
+          class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition" 
+          :disabled="props.submitting"
+          @click="emit('close')"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
-      <div class="px-5 py-4">
-        <div class="mb-3 flex flex-wrap gap-2">
-          <button class="rounded-lg bg-rose-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-600 disabled:opacity-60" :disabled="props.submitting" @click="setAll(true)">
-            本次全选覆盖
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-4">
+        <div class="flex items-center gap-2">
+          <button 
+            class="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 text-xs font-semibold transition" 
+            :disabled="props.submitting" 
+            @click="setAll(true)"
+          >
+            全部覆盖
           </button>
-          <button class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60" :disabled="props.submitting" @click="setAll(false)">
-            本次全选跳过
+          <button 
+            class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 text-xs font-semibold transition shadow-sm" 
+            :disabled="props.submitting" 
+            @click="setAll(false)"
+          >
+            全部跳过
           </button>
         </div>
-        <div class="max-h-72 overflow-auto rounded-lg border border-slate-200">
-          <table class="w-full text-left text-sm">
-            <thead class="bg-slate-50 text-slate-600">
+
+        <div class="max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/50 p-1">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0">
               <tr>
-                <th class="w-16 px-3 py-2">覆盖</th>
-                <th class="px-3 py-2">目标路径</th>
+                <th class="w-16 px-4 py-2.5 text-center">覆盖</th>
+                <th class="px-4 py-2.5">文件物理路径</th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-for="conflict in conflicts" :key="conflict.itemId" class="border-t border-slate-200">
-                <td class="px-3 py-2">
-                  <input v-model="decisions[conflict.itemId]" :disabled="props.submitting" type="checkbox">
+            <tbody class="divide-y divide-slate-200/60 bg-white">
+              <tr v-for="conflict in conflicts" :key="conflict.itemId" class="hover:bg-slate-50/50 transition">
+                <td class="px-4 py-3 text-center">
+                  <input v-model="decisions[conflict.itemId]" :disabled="props.submitting" type="checkbox" class="rounded text-rose-600 focus:ring-rose-500">
                 </td>
-                <td class="px-3 py-2 font-mono text-xs text-slate-700">{{ conflict.targetPath }}</td>
+                <td class="px-4 py-3 font-mono text-slate-700 select-all whitespace-normal break-all">{{ conflict.targetPath }}</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
-      <div class="flex items-center justify-between border-t border-slate-200 px-5 py-4">
-        <p class="text-xs text-slate-500">覆盖 {{ overwriteItemIds.length }} 项，跳过 {{ conflicts.length - overwriteItemIds.length }} 项</p>
+
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-between border-t border-slate-100 bg-slate-50/50 px-6 py-4">
+        <p class="text-xs font-semibold text-slate-500">
+          已选择覆盖 <span class="text-rose-600 font-bold">{{ overwriteItemIds.length }}</span> 项，跳过 <span class="text-slate-600 font-bold">{{ conflicts.length - overwriteItemIds.length }}</span> 项
+        </p>
         <div class="flex gap-2">
-          <button class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60" :disabled="props.submitting" @click="emit('close')">
+          <button 
+            class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-sm" 
+            :disabled="props.submitting" 
+            @click="emit('close')"
+          >
             取消
           </button>
-          <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60" :disabled="props.submitting" @click="confirm">
-            <span class="inline-flex items-center gap-2">
-              <span v-if="props.submitting" class="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-white" />
-              <span>{{ props.submitting ? '正在执行...' : '确认执行' }}</span>
-            </span>
+          <button 
+            class="rounded-lg bg-slate-900 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition shadow-sm inline-flex items-center gap-2" 
+            :disabled="props.submitting" 
+            @click="confirm"
+          >
+            <span v-if="props.submitting" class="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-white" />
+            <span>确认执行</span>
           </button>
         </div>
       </div>
