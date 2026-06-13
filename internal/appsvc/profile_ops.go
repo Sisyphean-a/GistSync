@@ -37,3 +37,7 @@ func (s *Service) AddFilesToProfile(ctx context.Context, profileID string, paths
 func (s *Service) RemoveProfileItems(ctx context.Context, profileID string, itemIDs []string) error {
 	return s.profiles.RemoveProfileItems(ctx, profileID, itemIDs)
 }
+
+func (s *Service) SetProfileItemsEnabled(ctx context.Context, profileID string, itemIDs []string, enabled bool) error {
+	return s.profiles.SetProfileItemsEnabled(ctx, profileID, itemIDs, enabled)
+}

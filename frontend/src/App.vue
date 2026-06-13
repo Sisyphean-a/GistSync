@@ -46,7 +46,6 @@ const uploadBusy = computed(() => activity.value === 'uploading')
 const startupSyncReady = computed(() => settingsStore.startupSyncReady.value)
 const startupSyncBusy = computed(() => settingsStore.snapshotLoading.value)
 const startupSyncError = computed(() => settingsStore.snapshotError.value)
-const quickActionsDisabled = computed(() => busy.value || !selectedProfileId.value || !startupSyncReady.value)
 
 // Credentials status
 const hasToken = computed(() => !!settingsStore.state.value?.token)
@@ -57,6 +56,12 @@ const isConfigured = computed(() => hasToken.value && hasPassword.value)
 const activeProfileDetails = computed(() => {
   return profiles.value.find((p) => p.id === selectedProfileId.value) || null
 })
+const enabledItemCount = computed(() => (activeProfileDetails.value?.items ?? []).filter((item) => item.enabled).length)
+const totalItemCount = computed(() => activeProfileDetails.value?.items?.length ?? 0)
+const noEnabledItems = computed(() => totalItemCount.value > 0 && enabledItemCount.value === 0)
+const quickActionsDisabled = computed(
+  () => busy.value || !selectedProfileId.value || !startupSyncReady.value || noEnabledItems.value,
+)
 
 onMounted(async () => {
   await initialize()
@@ -101,8 +106,8 @@ onMounted(async () => {
             </div>
           </div>
           <div v-if="activeProfileDetails" class="mt-2 flex items-center justify-between text-[10px] text-slate-500 px-1">
-            <span>跟踪文件:</span>
-            <span class="font-bold text-slate-700">{{ activeProfileDetails.items.length }} 个</span>
+            <span>参与同步:</span>
+            <span class="font-bold" :class="noEnabledItems ? 'text-rose-500' : 'text-slate-700'">{{ enabledItemCount }} / {{ totalItemCount }} 个</span>
           </div>
         </div>
 
@@ -259,6 +264,20 @@ onMounted(async () => {
             <div v-if="startupSyncError" class="rounded-2xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
               <p class="text-sm font-bold text-rose-700">初始化同步失败</p>
               <p class="text-xs text-rose-600 mt-1 whitespace-pre-wrap">{{ startupSyncError }}</p>
+            </div>
+
+            <!-- No enabled items warning -->
+            <div v-if="noEnabledItems" class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm flex items-start gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-amber-600 shrink-0 mt-0.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+              </svg>
+              <div class="flex-1">
+                <p class="text-sm font-bold text-amber-800">当前配置集没有启用任何文件</p>
+                <p class="text-xs text-amber-700 mt-0.5">一键同步将不会处理任何文件。请前往配置管理启用需要同步的条目。</p>
+              </div>
+              <button class="rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white transition shadow-sm shrink-0" @click="currentTab = 'profiles'">
+                去启用
+              </button>
             </div>
 
             <!-- Double Columns Operations -->

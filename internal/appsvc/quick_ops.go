@@ -36,7 +36,8 @@ func (o *DefaultSyncOrchestrator) QuickDownload(ctx context.Context, req QuickDo
 	if err != nil {
 		return QuickOperationResult{}, err
 	}
-	previewReq := syncflow.ApplySnapshotRequest{ProfileID: profile.ID, RestoreMode: profile.RestoreMode, RestoreRoot: profile.RestoreRoot}
+	selected := enabledItemIDs(profile.Items)
+	previewReq := syncflow.ApplySnapshotRequest{ProfileID: profile.ID, RestoreMode: profile.RestoreMode, RestoreRoot: profile.RestoreRoot, SelectedItemIDs: selected}
 	conflicts, err := syncService.PreviewApplyConflicts(ctx, previewReq)
 	if err != nil {
 		return QuickOperationResult{}, err
@@ -61,7 +62,8 @@ func (o *DefaultSyncOrchestrator) QuickDownload(ctx context.Context, req QuickDo
 	overwriteIDs := resolveOverwriteIDs(policy, conflicts, req.OverwriteItemIDs)
 	applyReq := syncflow.ApplySnapshotRequest{
 		ProfileID: profile.ID, SnapshotID: snapshotID, MasterPassword: data.MasterPassword,
-		RestoreMode: profile.RestoreMode, RestoreRoot: profile.RestoreRoot, OverwriteItemIDs: overwriteIDs,
+		RestoreMode: profile.RestoreMode, RestoreRoot: profile.RestoreRoot,
+		SelectedItemIDs: selected, OverwriteItemIDs: overwriteIDs,
 	}
 	applied, err := syncService.ApplySnapshot(ctx, applyReq)
 	if err != nil {
@@ -126,6 +128,7 @@ func mapConflicts(conflicts []syncflow.ApplyConflict) []QuickOperationItem {
 		items = append(items, QuickOperationItem{
 			ItemID: conflict.ItemID, TargetPath: conflict.TargetPath, Status: "conflict",
 			DiffPreview: conflict.DiffPreview, DiffStatus: conflict.DiffStatus,
+			DiffLines: conflict.DiffLines, AddedLines: conflict.AddedLines, RemovedLines: conflict.RemovedLines,
 		})
 	}
 	return items

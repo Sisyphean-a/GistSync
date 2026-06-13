@@ -1,5 +1,7 @@
 package appsvc
 
+import "GistSync/internal/syncflow"
+
 type QuickConflictPolicy string
 
 const (
@@ -26,12 +28,15 @@ type QuickOperationSummary struct {
 }
 
 type QuickOperationItem struct {
-	ItemID      string `json:"itemId"`
-	TargetPath  string `json:"targetPath"`
-	Status      string `json:"status"`
-	Reason      string `json:"reason"`
-	DiffPreview string `json:"diffPreview"`
-	DiffStatus  string `json:"diffStatus"`
+	ItemID       string              `json:"itemId"`
+	TargetPath   string              `json:"targetPath"`
+	Status       string              `json:"status"`
+	Reason       string              `json:"reason"`
+	DiffPreview  string              `json:"diffPreview"`
+	DiffStatus   string              `json:"diffStatus"`
+	DiffLines    []syncflow.DiffLine `json:"diffLines"`
+	AddedLines   int                 `json:"addedLines"`
+	RemovedLines int                 `json:"removedLines"`
 }
 
 type QuickOperationResult struct {

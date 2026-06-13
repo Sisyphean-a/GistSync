@@ -130,6 +130,27 @@ func (m *DefaultProfileManager) AddFilesToProfile(_ context.Context, profileID s
 	return m.store.Save(data)
 }
 
+func (m *DefaultProfileManager) SetProfileItemsEnabled(_ context.Context, profileID string, itemIDs []string, enabled bool) error {
+	data, err := m.store.Load()
+	if err != nil {
+		return err
+	}
+	profile, ok := findProfile(data, profileID)
+	if !ok {
+		return syncflow.ErrProfileNotFound
+	}
+	target := make(map[string]bool, len(itemIDs))
+	for _, id := range itemIDs {
+		target[id] = true
+	}
+	for i := range profile.Items {
+		if target[profile.Items[i].ID] {
+			profile.Items[i].Enabled = enabled
+		}
+	}
+	return m.store.Save(data)
+}
+
 func (m *DefaultProfileManager) RemoveProfileItems(_ context.Context, profileID string, itemIDs []string) error {
 	data, err := m.store.Load()
 	if err != nil {

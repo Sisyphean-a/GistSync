@@ -107,6 +107,29 @@ async function removeSelectedItems(): Promise<void> {
   }
 }
 
+async function toggleItemEnabled(itemId: string, enabled: boolean): Promise<void> {
+  try {
+    await store.setItemsEnabled([itemId], enabled)
+  } catch (error) {
+    status.value = `更新同步开关失败: ${String(error)}`
+  }
+}
+
+async function setSelectedEnabled(enabled: boolean): Promise<void> {
+  if (selectedItemIds.value.length === 0) {
+    return
+  }
+  try {
+    await store.setItemsEnabled([...selectedItemIds.value], enabled)
+    status.value = enabled ? '已启用选中文件的同步' : '已暂停选中文件的同步'
+  } catch (error) {
+    status.value = `批量更新失败: ${String(error)}`
+  }
+}
+
+const enabledCount = computed(() => (store.activeProfile.value?.items || []).filter((item) => item.enabled).length)
+const totalCount = computed(() => (store.activeProfile.value?.items || []).length)
+
 async function persistRestoreSettings(): Promise<void> {
   try {
     await store.updateActiveProfileRestore(restore.mode, restore.root)
@@ -241,7 +264,10 @@ const filteredItems = computed(() => {
       <div class="mb-4 flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <div>
           <h3 class="text-sm font-bold text-slate-900">文件管理条目</h3>
-          <p class="mt-1 text-xs text-slate-500">为当前配置集指定要追踪的本地配置文件。</p>
+          <p class="mt-1 text-xs text-slate-500">
+            为当前配置集指定要追踪的本地配置文件。
+            <span v-if="totalCount > 0" class="font-semibold text-slate-600">已启用 {{ enabledCount }} / {{ totalCount }} 个参与一键同步。</span>
+          </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <!-- Search field -->
@@ -255,8 +281,23 @@ const filteredItems = computed(() => {
               <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602z" />
             </svg>
           </div>
-          
-          <button 
+
+          <button
+            v-if="selectedItemIds.length > 0"
+            class="h-9 inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 text-xs font-semibold transition"
+            @click="setSelectedEnabled(true)"
+          >
+            启用选中
+          </button>
+          <button
+            v-if="selectedItemIds.length > 0"
+            class="h-9 inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 px-3 text-xs font-semibold transition"
+            @click="setSelectedEnabled(false)"
+          >
+            暂停选中
+          </button>
+
+          <button
             class="h-9 inline-flex items-center gap-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 text-xs font-semibold text-white transition shadow-sm"
             @click="addFiles"
           >
@@ -265,8 +306,8 @@ const filteredItems = computed(() => {
             </svg>
             添加文件 (可多选)
           </button>
-          
-          <button 
+
+          <button
             class="h-9 inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 px-3 text-xs font-semibold transition"
             :disabled="selectedItemIds.length === 0"
             @click="removeSelectedItems"
@@ -278,26 +319,48 @@ const filteredItems = computed(() => {
           </button>
         </div>
       </div>
-      
+
       <div class="overflow-hidden rounded-xl border border-slate-200 shadow-sm">
         <table class="w-full min-w-[800px] text-left text-sm border-collapse">
           <thead class="bg-slate-50 text-slate-600 font-semibold text-xs border-b border-slate-200">
             <tr>
               <th class="w-16 px-4 py-3 text-center">选中</th>
+              <th class="w-24 px-4 py-3 text-center">同步</th>
               <th class="px-4 py-3">原始物理路径 (模板)</th>
               <th class="px-4 py-3">云端相对层级 (Gist内文件名)</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            <tr v-for="item in filteredItems" :key="item.id" class="hover:bg-slate-50/50 transition">
+            <tr
+              v-for="item in filteredItems"
+              :key="item.id"
+              class="transition"
+              :class="item.enabled ? 'hover:bg-slate-50/50' : 'bg-slate-50/40 hover:bg-slate-100/50'"
+            >
               <td class="px-4 py-3 text-center">
                 <input v-model="selectedItemIds" :value="item.id" type="checkbox" class="rounded text-indigo-600 focus:ring-indigo-500">
               </td>
-              <td class="px-4 py-3 font-mono text-xs text-slate-700 select-all">{{ item.sourcePathTemplate }}</td>
-              <td class="px-4 py-3 font-mono text-xs text-slate-500 select-all">{{ item.relativePath }}</td>
+              <td class="px-4 py-3 text-center">
+                <button
+                  type="button"
+                  role="switch"
+                  :aria-checked="item.enabled"
+                  class="relative inline-flex h-5 w-9 items-center rounded-full transition focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-1"
+                  :class="item.enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                  :title="item.enabled ? '已启用：参与一键同步' : '已暂停：一键同步将跳过'"
+                  @click="toggleItemEnabled(item.id, !item.enabled)"
+                >
+                  <span
+                    class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition"
+                    :class="item.enabled ? 'translate-x-4' : 'translate-x-1'"
+                  />
+                </button>
+              </td>
+              <td class="px-4 py-3 font-mono text-xs select-all" :class="item.enabled ? 'text-slate-700' : 'text-slate-400 line-through'">{{ item.sourcePathTemplate }}</td>
+              <td class="px-4 py-3 font-mono text-xs select-all" :class="item.enabled ? 'text-slate-500' : 'text-slate-400'">{{ item.relativePath }}</td>
             </tr>
             <tr v-if="filteredItems.length === 0">
-              <td colspan="3" class="px-4 py-12 text-center text-sm text-slate-400">
+              <td colspan="4" class="px-4 py-12 text-center text-sm text-slate-400">
                 <div class="flex flex-col items-center justify-center gap-2">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-slate-300">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9z" />

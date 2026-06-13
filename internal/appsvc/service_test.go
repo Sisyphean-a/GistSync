@@ -107,6 +107,27 @@ func TestService_AddFilesToProfile_UsesHomePlaceholder(t *testing.T) {
 	}
 }
 
+func TestService_SetProfileItemsEnabled(t *testing.T) {
+	store := &fakeStore{data: settings.Data{Profiles: []settings.Profile{
+		{ID: "p1", Items: []settings.ProfileItem{
+			{ID: "i1", Enabled: true},
+			{ID: "i2", Enabled: true},
+		}},
+	}}}
+	svc := NewServiceWithDeps(store, defaultSyncFactory, func(prefix string) string { return prefix + "-id" })
+
+	if err := svc.SetProfileItemsEnabled(context.Background(), "p1", []string{"i2"}, false); err != nil {
+		t.Fatalf("SetProfileItemsEnabled returned error: %v", err)
+	}
+	items := store.data.Profiles[0].Items
+	if !items[0].Enabled {
+		t.Fatalf("expected i1 to stay enabled")
+	}
+	if items[1].Enabled {
+		t.Fatalf("expected i2 to be disabled")
+	}
+}
+
 func TestService_DownloadSync_RequiresOverwrite(t *testing.T) {
 	store := &fakeStore{data: settings.Data{Token: "t1", ActiveProfileID: "p1", Profiles: []settings.Profile{{ID: "p1"}}}}
 	syncSvc := &fakeSync{preview: []syncflow.ApplyConflict{{ItemID: "i1", TargetPath: "/tmp/x"}}}
@@ -156,6 +177,43 @@ func TestService_QuickUpload_UsesEnabledItemsOnly(t *testing.T) {
 	}
 	if result.SnapshotID != "s1" || result.Summary.Uploaded != 2 {
 		t.Fatalf("quick upload result mismatch: %+v", result)
+	}
+}
+
+func TestService_QuickDownload_UsesEnabledItemsOnly(t *testing.T) {
+	store := &fakeStore{
+		data: settings.Data{
+			Token:           "t1",
+			MasterPassword:  "pwd",
+			ActiveProfileID: "p1",
+			Profiles: []settings.Profile{{
+				ID: "p1",
+				Items: []settings.ProfileItem{
+					{ID: "i1", Enabled: true},
+					{ID: "i2", Enabled: false},
+					{ID: "i3", Enabled: true},
+				},
+			}},
+		},
+	}
+	syncSvc := &fakeSync{
+		apply:          syncflow.ApplySnapshotResult{Applied: 2},
+		listSnapResult: []syncflow.SnapshotMeta{{ID: "snap-1"}},
+	}
+	svc := NewServiceWithDeps(store, func(string) (SyncService, error) { return syncSvc, nil }, func(prefix string) string { return prefix + "-id" })
+
+	_, err := svc.QuickDownload(context.Background(), QuickDownloadRequest{
+		ProfileID:      "p1",
+		ConflictPolicy: QuickConflictOverwriteAll,
+	})
+	if err != nil {
+		t.Fatalf("QuickDownload returned error: %v", err)
+	}
+	if got := syncSvc.previewReq.SelectedItemIDs; len(got) != 2 || got[0] != "i1" || got[1] != "i3" {
+		t.Fatalf("preview selected item ids mismatch: %#v", got)
+	}
+	if got := syncSvc.applyReq.SelectedItemIDs; len(got) != 2 || got[0] != "i1" || got[1] != "i3" {
+		t.Fatalf("apply selected item ids mismatch: %#v", got)
 	}
 }
 

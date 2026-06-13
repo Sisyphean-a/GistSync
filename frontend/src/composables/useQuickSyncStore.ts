@@ -73,6 +73,9 @@ async function download(): Promise<void> {
         targetPath: item.targetPath,
         diffPreview: item.diffPreview || '',
         diffStatus: item.diffStatus || '',
+        diffLines: item.diffLines ?? [],
+        addedLines: item.addedLines ?? 0,
+        removedLines: item.removedLines ?? 0,
       }))
       conflictVisible.value = true
       status.value = `检测到 ${result.summary.conflicts} 个冲突，默认将全部覆盖，可按需修改`

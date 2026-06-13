@@ -38,6 +38,8 @@ export function SaveSettingsV2(arg1:settings.Data):Promise<void>;
 
 export function SetActiveProfile(arg1:string):Promise<void>;
 
+export function SetProfileItemsEnabled(arg1:string,arg2:Array<string>,arg3:boolean):Promise<void>;
+
 export function UploadProfile(arg1:string,arg2:Array<string>):Promise<syncflow.UploadProfileResult>;
 
 export function UploadSync():Promise<string>;

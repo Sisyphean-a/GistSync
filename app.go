@@ -79,6 +79,10 @@ func (a *App) RemoveProfileItems(profileID string, itemIDs []string) error {
 	return a.svc.RemoveProfileItems(a.ctx, profileID, itemIDs)
 }
 
+func (a *App) SetProfileItemsEnabled(profileID string, itemIDs []string, enabled bool) error {
+	return a.svc.SetProfileItemsEnabled(a.ctx, profileID, itemIDs, enabled)
+}
+
 func (a *App) UploadProfile(profileID string, selectedItemIDs []string) (syncflow.UploadProfileResult, error) {
 	return a.svc.UploadProfile(a.ctx, profileID, selectedItemIDs)
 }

@@ -72,8 +72,9 @@ async function refreshState(): Promise<void> {
     selectedRestoreItemIds.value = []
     return
   }
-  selectedUploadItemIds.value = profile.items.map((item) => item.id)
-  selectedRestoreItemIds.value = profile.items.map((item) => item.id)
+  const enabledIds = profile.items.filter((item) => item.enabled).map((item) => item.id)
+  selectedUploadItemIds.value = enabledIds
+  selectedRestoreItemIds.value = enabledIds
   snapshots.value = store.getSnapshots(profile.id)
   selectedSnapshotId.value = snapshots.value[0]?.id ?? ''
 }
@@ -228,11 +229,33 @@ const filteredRestoreItems = computed(() => {
     return items
   }
   const kw = restoreKeyword.value.toLowerCase().trim()
-  return items.filter((item) => 
+  return items.filter((item) =>
     (item.relativePath || '').toLowerCase().includes(kw) ||
     (item.sourcePathTemplate || '').toLowerCase().includes(kw)
   )
 })
+
+function selectUpload(mode: 'all' | 'none' | 'enabled'): void {
+  const items = filteredUploadItems.value
+  if (mode === 'none') {
+    selectedUploadItemIds.value = []
+    return
+  }
+  selectedUploadItemIds.value = items
+    .filter((item) => mode === 'all' || item.enabled)
+    .map((item) => item.id)
+}
+
+function selectRestore(mode: 'all' | 'none' | 'enabled'): void {
+  const items = filteredRestoreItems.value
+  if (mode === 'none') {
+    selectedRestoreItemIds.value = []
+    return
+  }
+  selectedRestoreItemIds.value = items
+    .filter((item) => mode === 'all' || item.enabled)
+    .map((item) => item.id)
+}
 </script>
 
 <template>
@@ -308,15 +331,29 @@ const filteredRestoreItems = computed(() => {
             </div>
           </div>
           
+          <div class="mb-2 flex items-center justify-between text-[11px]">
+            <div class="flex items-center gap-2">
+              <button class="font-semibold text-indigo-600 hover:text-indigo-800 disabled:text-slate-300" :disabled="busy" @click="selectUpload('all')">全选</button>
+              <span class="text-slate-300">·</span>
+              <button class="font-semibold text-indigo-600 hover:text-indigo-800 disabled:text-slate-300" :disabled="busy" @click="selectUpload('enabled')">仅启用</button>
+              <span class="text-slate-300">·</span>
+              <button class="font-semibold text-slate-500 hover:text-slate-700 disabled:text-slate-300" :disabled="busy" @click="selectUpload('none')">清空</button>
+            </div>
+            <span class="text-slate-400">已选 {{ selectedUploadItemIds.length }} / {{ filteredUploadItems.length }}</span>
+          </div>
+
           <div class="mb-4 max-h-[300px] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/50 p-2 space-y-1">
-            <label 
-              v-for="item in filteredUploadItems" 
-              :key="`upload-${item.id}`" 
+            <label
+              v-for="item in filteredUploadItems"
+              :key="`upload-${item.id}`"
               class="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-xs transition hover:bg-slate-50 cursor-pointer shadow-sm"
             >
               <input v-model="selectedUploadItemIds" :disabled="busy" :value="item.id" type="checkbox" class="rounded text-indigo-600 focus:ring-indigo-500">
               <div class="truncate flex-1">
-                <div class="font-semibold text-slate-800 truncate">{{ item.relativePath }}</div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-semibold text-slate-800 truncate">{{ item.relativePath }}</span>
+                  <span v-if="!item.enabled" class="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 border border-slate-200">已暂停</span>
+                </div>
                 <div class="text-[10px] text-slate-400 font-mono truncate">{{ item.sourcePathTemplate }}</div>
               </div>
             </label>
@@ -353,15 +390,29 @@ const filteredRestoreItems = computed(() => {
             </div>
           </div>
           
+          <div class="mb-2 flex items-center justify-between text-[11px]">
+            <div class="flex items-center gap-2">
+              <button class="font-semibold text-indigo-600 hover:text-indigo-800 disabled:text-slate-300" :disabled="busy" @click="selectRestore('all')">全选</button>
+              <span class="text-slate-300">·</span>
+              <button class="font-semibold text-indigo-600 hover:text-indigo-800 disabled:text-slate-300" :disabled="busy" @click="selectRestore('enabled')">仅启用</button>
+              <span class="text-slate-300">·</span>
+              <button class="font-semibold text-slate-500 hover:text-slate-700 disabled:text-slate-300" :disabled="busy" @click="selectRestore('none')">清空</button>
+            </div>
+            <span class="text-slate-400">已选 {{ selectedRestoreItemIds.length }} / {{ filteredRestoreItems.length }}</span>
+          </div>
+
           <div class="mb-4 max-h-[300px] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/50 p-2 space-y-1">
-            <label 
-              v-for="item in filteredRestoreItems" 
-              :key="`restore-${item.id}`" 
+            <label
+              v-for="item in filteredRestoreItems"
+              :key="`restore-${item.id}`"
               class="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-xs transition hover:bg-slate-50 cursor-pointer shadow-sm"
             >
               <input v-model="selectedRestoreItemIds" :disabled="busy" :value="item.id" type="checkbox" class="rounded text-indigo-600 focus:ring-indigo-500">
               <div class="truncate flex-1">
-                <div class="font-semibold text-slate-800 truncate">{{ item.relativePath }}</div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-semibold text-slate-800 truncate">{{ item.relativePath }}</span>
+                  <span v-if="!item.enabled" class="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 border border-slate-200">已暂停</span>
+                </div>
                 <div class="text-[10px] text-slate-400 font-mono truncate">{{ item.sourcePathTemplate }}</div>
               </div>
             </label>

@@ -70,6 +70,10 @@ export function SetActiveProfile(arg1) {
   return window['go']['main']['App']['SetActiveProfile'](arg1);
 }
 
+export function SetProfileItemsEnabled(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetProfileItemsEnabled'](arg1, arg2, arg3);
+}
+
 export function UploadProfile(arg1, arg2) {
   return window['go']['main']['App']['UploadProfile'](arg1, arg2);
 }

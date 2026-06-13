@@ -20,6 +20,7 @@ const (
 const (
 	maxDiffSourceBytes  = 200 * 1024
 	maxDiffPreviewRunes = 12 * 1024
+	maxDiffPreviewLines = 600
 )
 
 func (s *Service) buildConflict(
@@ -33,91 +34,66 @@ func (s *Service) buildConflict(
 		ItemID:     item.ItemID,
 		TargetPath: targetPath,
 	}
-	diff, status := s.buildDiffPreview(ctx, gistID, item, req.MasterPassword, targetPath)
-	conflict.DiffPreview = diff
+	local, remote, status := s.loadDiffSources(ctx, gistID, item, req.MasterPassword, targetPath)
 	conflict.DiffStatus = status
+	if status != diffStatusReady {
+		return conflict
+	}
+	lines := computeLineDiff(local, remote)
+	conflict.DiffLines = trimDiffLines(lines, maxDiffPreviewLines)
+	conflict.AddedLines, conflict.RemovedLines = diffCounts(lines)
+	conflict.DiffPreview = trimRunes(buildUnifiedDiff(local, remote), maxDiffPreviewRunes)
 	return conflict
 }
 
-func (s *Service) buildDiffPreview(
+// loadDiffSources 读取本地与解密后的远端文本，返回内容及可预览状态。
+func (s *Service) loadDiffSources(
 	ctx context.Context,
 	gistID string,
 	item manifestSnapshotItem,
 	password string,
 	targetPath string,
-) (string, string) {
+) (local string, remote string, status string) {
 	if empty(password) {
-		return "", diffStatusDecodeFail
+		return "", "", diffStatusDecodeFail
 	}
 	localRaw, err := os.ReadFile(targetPath)
 	if err != nil {
-		return "", diffStatusReadFail
+		return "", "", diffStatusReadFail
 	}
 	if len(localRaw) > maxDiffSourceBytes {
-		return "", diffStatusTooLarge
+		return "", "", diffStatusTooLarge
 	}
 	if isLikelyBinary(localRaw) {
-		return "", diffStatusBinary
+		return "", "", diffStatusBinary
 	}
 	encrypted, err := s.cloud.GetFileContent(ctx, FileRequest{GistID: gistID, FileName: item.BlobFile})
 	if err != nil {
-		return "", diffStatusReadFail
+		return "", "", diffStatusReadFail
 	}
 	remoteText, err := security.DecryptString(encrypted, password)
 	if err != nil {
-		return "", diffStatusDecodeFail
+		return "", "", diffStatusDecodeFail
 	}
 	remoteRaw := []byte(remoteText)
 	if len(remoteRaw) > maxDiffSourceBytes {
-		return "", diffStatusTooLarge
+		return "", "", diffStatusTooLarge
 	}
 	if isLikelyBinary(remoteRaw) {
-		return "", diffStatusBinary
+		return "", "", diffStatusBinary
 	}
-	diff := buildSimpleUnifiedDiff(string(localRaw), remoteText)
-	return trimRunes(diff, maxDiffPreviewRunes), diffStatusReady
+	return string(localRaw), remoteText, diffStatusReady
 }
 
-func buildSimpleUnifiedDiff(local string, remote string) string {
-	left := splitLines(local)
-	right := splitLines(remote)
-	var out strings.Builder
-	out.WriteString("--- local\n")
-	out.WriteString("+++ remote\n")
-	out.WriteString("@@ conflict @@\n")
-
-	maxLen := max(len(left), len(right))
-	for i := 0; i < maxLen; i++ {
-		var l string
-		var r string
-		hasL := i < len(left)
-		hasR := i < len(right)
-		if hasL {
-			l = left[i]
-		}
-		if hasR {
-			r = right[i]
-		}
-		if hasL && hasR && l == r {
-			continue
-		}
-		if hasL {
-			out.WriteString("-")
-			out.WriteString(l)
-			out.WriteString("\n")
-		}
-		if hasR {
-			out.WriteString("+")
-			out.WriteString(r)
-			out.WriteString("\n")
-		}
+// trimDiffLines 限制返回给前端的结构化行数，超出部分以截断提示收尾。
+func trimDiffLines(lines []diffLine, limit int) []diffLine {
+	if limit <= 0 || len(lines) <= limit {
+		return lines
 	}
-
-	diff := out.String()
-	if diff == "--- local\n+++ remote\n@@ conflict @@\n" {
-		return diff + " (no textual difference)\n"
-	}
-	return diff
+	trimmed := make([]diffLine, 0, limit+1)
+	trimmed = append(trimmed, lines[:limit]...)
+	trimmed = append(trimmed, diffLine{Kind: diffKindContext, Text: "... [diff truncated]"})
+	return trimmed
 }
 
 func splitLines(raw string) []string {
@@ -150,11 +126,4 @@ func isLikelyBinary(raw []byte) bool {
 		}
 	}
 	return float64(printable)/float64(len(raw)) < 0.9
-}
-
-func max(a int, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

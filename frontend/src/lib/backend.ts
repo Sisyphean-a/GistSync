@@ -12,9 +12,10 @@ import {
   RemoveProfileItems,
   SaveSettingsV2,
   SetActiveProfile,
+  SetProfileItemsEnabled,
   UploadProfile,
 } from '../../wailsjs/go/main/App'
-import { settings, syncflow } from '../../wailsjs/go/models'
+import { appsvc, settings, syncflow } from '../../wailsjs/go/models'
 
 export interface ProfileItem {
   id: string
@@ -46,11 +47,19 @@ export interface SnapshotMeta {
   createdAt: string
 }
 
+export interface DiffLine {
+  kind: 'context' | 'add' | 'delete'
+  text: string
+}
+
 export interface ApplyConflict {
   itemId: string
   targetPath: string
   diffPreview: string
   diffStatus: string
+  diffLines: DiffLine[]
+  addedLines: number
+  removedLines: number
 }
 
 export interface ApplySnapshotRequest {
@@ -108,6 +117,9 @@ export interface QuickOperationItem {
   reason: string
   diffPreview: string
   diffStatus: string
+  diffLines: DiffLine[]
+  addedLines: number
+  removedLines: number
 }
 
 export interface QuickOperationResult {
@@ -160,12 +172,22 @@ function mapSnapshot(item: syncflow.SnapshotMeta): SnapshotMeta {
   return { id: item.id, createdAt: item.createdAt }
 }
 
+function mapDiffLines(lines: Array<{ kind: string; text: string }> | undefined): DiffLine[] {
+  return (lines ?? []).map((line) => ({
+    kind: (line.kind as DiffLine['kind']) ?? 'context',
+    text: line.text ?? '',
+  }))
+}
+
 function mapConflict(item: syncflow.ApplyConflict): ApplyConflict {
   return {
     itemId: item.itemId,
     targetPath: item.targetPath,
     diffPreview: item.diffPreview ?? '',
     diffStatus: item.diffStatus ?? '',
+    diffLines: mapDiffLines(item.diffLines),
+    addedLines: item.addedLines ?? 0,
+    removedLines: item.removedLines ?? 0,
   }
 }
 
@@ -194,6 +216,39 @@ function mapUploadResult(result: syncflow.UploadProfileResult): UploadProfileRes
   return { snapshotId: result.snapshotId, uploaded: result.uploaded }
 }
 
+function mapQuickItem(item: appsvc.QuickOperationItem): QuickOperationItem {
+  return {
+    itemId: item.itemId,
+    targetPath: item.targetPath,
+    status: item.status,
+    reason: item.reason ?? '',
+    diffPreview: item.diffPreview ?? '',
+    diffStatus: item.diffStatus ?? '',
+    diffLines: mapDiffLines(item.diffLines),
+    addedLines: item.addedLines ?? 0,
+    removedLines: item.removedLines ?? 0,
+  }
+}
+
+function mapQuickResult(result: appsvc.QuickOperationResult): QuickOperationResult {
+  return {
+    operationId: result.operationId,
+    action: result.action,
+    profileId: result.profileId,
+    snapshotId: result.snapshotId ?? '',
+    requiresConflictResolution: result.requiresConflictResolution,
+    summary: {
+      uploaded: result.summary?.uploaded ?? 0,
+      applied: result.summary?.applied ?? 0,
+      skipped: result.summary?.skipped ?? 0,
+      conflicts: result.summary?.conflicts ?? 0,
+      errors: result.summary?.errors ?? 0,
+    },
+    conflicts: (result.conflicts ?? []).map(mapQuickItem),
+    items: (result.items ?? []).map(mapQuickItem),
+  }
+}
+
 export const loadSettings = async (): Promise<SettingsData> => mapSettings(await LoadSettingsV2())
 export const saveSettings = async (data: SettingsData): Promise<void> => SaveSettingsV2(toSettingsModel(data))
 export const createProfile = async (name: string): Promise<Profile> => mapProfile(await CreateProfile(name))
@@ -202,6 +257,11 @@ export const setActiveProfile = async (profileId: string): Promise<void> => SetA
 export const chooseFilesForProfile = async (profileId: string): Promise<string[]> => ChooseFilesForProfile(profileId)
 export const removeProfileItems = async (profileId: string, itemIds: string[]): Promise<void> =>
   RemoveProfileItems(profileId, itemIds)
+export const setProfileItemsEnabled = async (
+  profileId: string,
+  itemIds: string[],
+  enabled: boolean,
+): Promise<void> => SetProfileItemsEnabled(profileId, itemIds, enabled)
 export const uploadProfile = async (profileId: string, selectedItemIds: string[]): Promise<UploadProfileResult> =>
   mapUploadResult(await UploadProfile(profileId, selectedItemIds))
 export const listSnapshots = async (profileId: string): Promise<SnapshotMeta[]> =>
@@ -211,5 +271,7 @@ export const previewApplyConflicts = async (req: ApplySnapshotRequest): Promise<
 export const applySnapshot = async (req: ApplySnapshotRequest): Promise<ApplySnapshotResult> =>
   mapApplyResult(await ApplySnapshot(toApplyRequestModel(req)))
 export const pullProfilesFromCloud = async (): Promise<number> => PullProfilesFromCloud()
-export const quickUpload = async (req: QuickUploadRequest): Promise<QuickOperationResult> => QuickUpload(req)
-export const quickDownload = async (req: QuickDownloadRequest): Promise<QuickOperationResult> => QuickDownload(req)
+export const quickUpload = async (req: QuickUploadRequest): Promise<QuickOperationResult> =>
+  mapQuickResult(await QuickUpload(req))
+export const quickDownload = async (req: QuickDownloadRequest): Promise<QuickOperationResult> =>
+  mapQuickResult(await QuickDownload(req))

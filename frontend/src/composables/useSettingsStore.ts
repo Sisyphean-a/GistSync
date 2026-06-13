@@ -4,6 +4,7 @@ import {
   loadSettings,
   saveSettings,
   setActiveProfile,
+  setProfileItemsEnabled,
   type SnapshotMeta,
   type Profile,
   type SettingsData,
@@ -168,6 +169,41 @@ async function updateActiveProfileRestore(mode: 'original' | 'rooted', root: str
   })
 }
 
+function applyItemsEnabled(current: SettingsData, itemIds: string[], enabled: boolean): SettingsData {
+  const target = new Set(itemIds)
+  const next = cloneSettings(current)
+  const profile = next.profiles.find((item) => item.id === next.activeProfileId)
+  if (!profile) {
+    return next
+  }
+  profile.items = profile.items.map((item) =>
+    target.has(item.id) ? { ...item, enabled } : item,
+  )
+  return next
+}
+
+async function setItemsEnabled(itemIds: string[], enabled: boolean): Promise<void> {
+  if (itemIds.length === 0) {
+    return
+  }
+  await enqueue(async () => {
+    await ensureLoadedUnsafe()
+    const current = state.value
+    if (!current) {
+      return
+    }
+    const profileId = current.activeProfileId
+    const rollback = cloneSettings(current)
+    state.value = applyItemsEnabled(current, itemIds, enabled)
+    try {
+      await setProfileItemsEnabled(profileId, itemIds, enabled)
+    } catch (error) {
+      state.value = rollback
+      throw error
+    }
+  })
+}
+
 async function flushPendingOps(): Promise<void> {
   await opChain
 }
@@ -189,6 +225,7 @@ export function useSettingsStore() {
     getSnapshots,
     saveCredentials,
     updateActiveProfileRestore,
+    setItemsEnabled,
     flushPendingOps,
   }
 }

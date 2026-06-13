@@ -37,6 +37,7 @@ type ProfileManager interface {
 	SetActiveProfile(ctx context.Context, profileID string) error
 	AddFilesToProfile(ctx context.Context, profileID string, paths []string) error
 	RemoveProfileItems(ctx context.Context, profileID string, itemIDs []string) error
+	SetProfileItemsEnabled(ctx context.Context, profileID string, itemIDs []string, enabled bool) error
 }
 
 type SyncOrchestrator interface {

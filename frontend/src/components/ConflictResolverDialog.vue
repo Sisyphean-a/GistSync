@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
+import DiffViewer from './DiffViewer.vue'
 import type { ApplyConflict } from '../lib/backend'
 
 const props = defineProps<{
@@ -126,7 +127,7 @@ function diffStatusText(status: string): string {
                 </td>
                 <td class="px-4 py-3 text-slate-700 whitespace-normal break-all">
                   <div class="font-mono select-all">{{ conflict.targetPath }}</div>
-                  <div class="mt-1 flex items-center gap-2">
+                  <div class="mt-1 flex flex-wrap items-center gap-2">
                     <button
                       v-if="conflict.diffStatus === 'ready'"
                       type="button"
@@ -135,12 +136,23 @@ function diffStatusText(status: string): string {
                     >
                       {{ expanded[conflict.itemId] ? '收起差异' : '查看差异' }}
                     </button>
-                    <span v-else class="text-[11px] text-slate-500">{{ diffStatusText(conflict.diffStatus) }}</span>
+                    <span
+                      v-if="conflict.diffStatus === 'ready' && (conflict.addedLines > 0 || conflict.removedLines > 0)"
+                      class="inline-flex items-center gap-1.5 text-[11px] font-mono"
+                    >
+                      <span class="text-emerald-600">+{{ conflict.addedLines }}</span>
+                      <span class="text-rose-600">-{{ conflict.removedLines }}</span>
+                    </span>
+                    <span v-else-if="conflict.diffStatus !== 'ready'" class="text-[11px] text-slate-500">{{ diffStatusText(conflict.diffStatus) }}</span>
                   </div>
-                  <pre
+                  <DiffViewer
                     v-if="expanded[conflict.itemId] && conflict.diffStatus === 'ready'"
-                    class="mt-2 max-h-40 overflow-auto rounded border border-slate-200 bg-slate-900 p-2 text-[11px] leading-4 text-slate-100"
-                  >{{ conflict.diffPreview }}</pre>
+                    :lines="conflict.diffLines"
+                    :added-lines="conflict.addedLines"
+                    :removed-lines="conflict.removedLines"
+                    max-height-class="max-h-40"
+                    class="mt-2"
+                  />
                 </td>
               </tr>
             </tbody>

@@ -56,10 +56,19 @@ type SnapshotMeta struct {
 }
 
 type ApplyConflict struct {
-	ItemID      string `json:"itemId"`
-	TargetPath  string `json:"targetPath"`
-	DiffPreview string `json:"diffPreview"`
-	DiffStatus  string `json:"diffStatus"`
+	ItemID       string     `json:"itemId"`
+	TargetPath   string     `json:"targetPath"`
+	DiffPreview  string     `json:"diffPreview"`
+	DiffStatus   string     `json:"diffStatus"`
+	DiffLines    []DiffLine `json:"diffLines"`
+	AddedLines   int        `json:"addedLines"`
+	RemovedLines int        `json:"removedLines"`
+}
+
+// DiffLine 是导出的结构化 diff 行，供前端按语义着色渲染。
+type DiffLine struct {
+	Kind string `json:"kind"`
+	Text string `json:"text"`
 }
 
 type ApplySnapshotRequest struct {
