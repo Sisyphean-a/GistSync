@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"GistSync/internal/profileutil"
 	"GistSync/internal/security"
 	"GistSync/internal/settings"
 )
@@ -65,6 +66,7 @@ func TestService_UploadAndApplySnapshot(t *testing.T) {
 			},
 		},
 	}
+	stableID := profileutil.StableItemID(sourceFile, "config.txt")
 
 	uploadResult, err := service.UploadProfile(context.Background(), UploadProfileRequest{
 		Profile: profile, MasterPassword: "123",
@@ -91,7 +93,7 @@ func TestService_UploadAndApplySnapshot(t *testing.T) {
 
 	applyResult, err := service.ApplySnapshot(context.Background(), ApplySnapshotRequest{
 		ProfileID: profile.ID, SnapshotID: uploadResult.SnapshotID, MasterPassword: "123",
-		OverwriteItemIDs: []string{"item-1"},
+		OverwriteItemIDs: []string{stableID},
 	})
 	if err != nil {
 		t.Fatalf("ApplySnapshot returned error: %v", err)
@@ -149,7 +151,7 @@ func TestService_UploadProfile_WithSelectedItemIDs(t *testing.T) {
 	if len(manifestData.Snapshots) != 1 || len(manifestData.Snapshots[0].Items) != 1 {
 		t.Fatalf("expected one snapshot item, got %#v", manifestData.Snapshots)
 	}
-	if manifestData.Snapshots[0].Items[0].ItemID != "item-b" {
+	if manifestData.Snapshots[0].Items[0].ItemID != profileutil.StableItemID(fileB, "b.txt") {
 		t.Fatalf("expected item-b uploaded, got %s", manifestData.Snapshots[0].Items[0].ItemID)
 	}
 }
@@ -333,20 +335,22 @@ func TestService_ApplySnapshot_WithSelectedItemIDs(t *testing.T) {
 	cloud.files[manifestFileName] = string(raw)
 	cloud.files["blob1.enc"] = encA
 	cloud.files["blob2.enc"] = encB
+	itemAID := profileutil.StableItemID("{{HOME}}/a.txt", "a.txt")
+	itemBID := profileutil.StableItemID("{{HOME}}/b.txt", "b.txt")
 
 	conflicts, err := service.PreviewApplyConflicts(context.Background(), ApplySnapshotRequest{
-		ProfileID: "p1", SnapshotID: "s1", RestoreMode: restoreRooted, RestoreRoot: rootDir, SelectedItemIDs: []string{"i1"},
+		ProfileID: "p1", SnapshotID: "s1", RestoreMode: restoreRooted, RestoreRoot: rootDir, SelectedItemIDs: []string{itemAID},
 	})
 	if err != nil {
 		t.Fatalf("PreviewApplyConflicts returned error: %v", err)
 	}
-	if len(conflicts) != 1 || conflicts[0].ItemID != "i1" {
+	if len(conflicts) != 1 || conflicts[0].ItemID != itemAID {
 		t.Fatalf("expected only i1 conflict, got %#v", conflicts)
 	}
 
 	result, err := service.ApplySnapshot(context.Background(), ApplySnapshotRequest{
 		ProfileID: "p1", SnapshotID: "s1", MasterPassword: "pwd", RestoreMode: restoreRooted,
-		RestoreRoot: rootDir, SelectedItemIDs: []string{"i2"},
+		RestoreRoot: rootDir, SelectedItemIDs: []string{itemBID},
 	})
 	if err != nil {
 		t.Fatalf("ApplySnapshot returned error: %v", err)
@@ -368,6 +372,72 @@ func TestService_ApplySnapshot_WithSelectedItemIDs(t *testing.T) {
 	}
 	if string(rawA) != "local-a" {
 		t.Fatalf("expected fileA unchanged, got %q", string(rawA))
+	}
+}
+
+func TestService_PreviewApplyConflicts_NormalizesLegacyDuplicateItemIDs(t *testing.T) {
+	cloud := newFakeCloud()
+	service := NewService(cloud)
+	rootDir := t.TempDir()
+	fileA := filepath.Join(rootDir, "a.txt")
+	fileB := filepath.Join(rootDir, "b.txt")
+	if err := os.WriteFile(fileA, []byte("local-a"), 0o600); err != nil {
+		t.Fatalf("write local fileA failed: %v", err)
+	}
+	if err := os.WriteFile(fileB, []byte("local-b"), 0o600); err != nil {
+		t.Fatalf("write local fileB failed: %v", err)
+	}
+	encA, err := securityEncrypt("remote-a", "pwd")
+	if err != nil {
+		t.Fatalf("encrypt A failed: %v", err)
+	}
+	encB, err := securityEncrypt("remote-b", "pwd")
+	if err != nil {
+		t.Fatalf("encrypt B failed: %v", err)
+	}
+	manifestData := manifest{
+		Version: 2,
+		Profiles: []manifestProfile{{
+			ID:          "p1",
+			Name:        "P1",
+			RestoreMode: restoreRooted,
+			Items: []manifestProfileItem{
+				{ID: "legacy-shared", SourcePathTemplate: "{{HOME}}/a.txt", RelativePath: "a.txt", Enabled: true},
+				{ID: "legacy-shared", SourcePathTemplate: "{{HOME}}/b.txt", RelativePath: "b.txt", Enabled: true},
+			},
+		}},
+		Snapshots: []manifestSnapshot{{
+			ID:        "s1",
+			ProfileID: "p1",
+			CreatedAt: "2026-03-24T11:00:00Z",
+			Items: []manifestSnapshotItem{
+				{ItemID: "legacy-shared", SourcePathTemplate: "{{HOME}}/a.txt", RelativePath: "a.txt", BlobFile: "blob1.enc"},
+				{ItemID: "legacy-shared", SourcePathTemplate: "{{HOME}}/b.txt", RelativePath: "b.txt", BlobFile: "blob2.enc"},
+			},
+		}},
+	}
+	raw, _ := json.Marshal(manifestData)
+	cloud.files[manifestFileName] = string(raw)
+	cloud.files["blob1.enc"] = encA
+	cloud.files["blob2.enc"] = encB
+	itemAID := profileutil.StableItemID("{{HOME}}/a.txt", "a.txt")
+
+	conflicts, err := service.PreviewApplyConflicts(context.Background(), ApplySnapshotRequest{
+		ProfileID:       "p1",
+		SnapshotID:      "s1",
+		MasterPassword:  "pwd",
+		RestoreMode:     restoreRooted,
+		RestoreRoot:     rootDir,
+		SelectedItemIDs: []string{itemAID},
+	})
+	if err != nil {
+		t.Fatalf("PreviewApplyConflicts returned error: %v", err)
+	}
+	if len(conflicts) != 1 {
+		t.Fatalf("expected one normalized conflict, got %#v", conflicts)
+	}
+	if conflicts[0].ItemID != itemAID {
+		t.Fatalf("expected normalized item id %q, got %q", itemAID, conflicts[0].ItemID)
 	}
 }
 

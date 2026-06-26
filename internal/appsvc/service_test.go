@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"GistSync/internal/profileutil"
 	"GistSync/internal/settings"
 	"GistSync/internal/syncflow"
 )
@@ -104,6 +105,37 @@ func TestService_AddFilesToProfile_UsesHomePlaceholder(t *testing.T) {
 	}
 	if item.RelativePath != ".gitconfig" {
 		t.Fatalf("relative path mismatch: %q", item.RelativePath)
+	}
+}
+
+func TestService_LoadSettings_NormalizesDuplicateItemIDs(t *testing.T) {
+	store := &fakeStore{
+		data: settings.Data{
+			Profiles: []settings.Profile{{
+				ID: "p1",
+				Items: []settings.ProfileItem{
+					{ID: "item-shared", SourcePathTemplate: `C:\Users\me\.gitconfig`, RelativePath: `.gitconfig`, Enabled: true},
+					{ID: "item-shared", SourcePathTemplate: `C:\Users\me\.ssh\config`, RelativePath: `.ssh/config`, Enabled: true},
+				},
+			}},
+		},
+	}
+	svc := NewServiceWithDeps(store, defaultSyncFactory, func(prefix string) string { return prefix + "-id" })
+
+	data, err := svc.LoadSettings(context.Background())
+	if err != nil {
+		t.Fatalf("LoadSettings returned error: %v", err)
+	}
+
+	items := data.Profiles[0].Items
+	if items[0].ID == items[1].ID {
+		t.Fatalf("expected distinct ids after normalization, got %q", items[0].ID)
+	}
+	if items[0].ID != profileutil.StableItemID(items[0].SourcePathTemplate, items[0].RelativePath) {
+		t.Fatalf("unexpected first item id: %q", items[0].ID)
+	}
+	if items[1].ID != profileutil.StableItemID(items[1].SourcePathTemplate, items[1].RelativePath) {
+		t.Fatalf("unexpected second item id: %q", items[1].ID)
 	}
 }
 

@@ -25,6 +25,11 @@ func (m *DefaultProfileManager) LoadSettings(ctx context.Context) (settings.Data
 	if err != nil {
 		return settings.Data{}, err
 	}
+	if normalizeProfiles(data.Profiles) {
+		if err = m.store.Save(data); err != nil {
+			return settings.Data{}, err
+		}
+	}
 	if !shouldBootstrap(data) {
 		return data, nil
 	}
@@ -36,6 +41,7 @@ func (m *DefaultProfileManager) LoadSettings(ctx context.Context) (settings.Data
 }
 
 func (m *DefaultProfileManager) SaveSettings(_ context.Context, data settings.Data) error {
+	normalizeProfiles(data.Profiles)
 	return m.store.Save(data)
 }
 
@@ -115,15 +121,21 @@ func (m *DefaultProfileManager) AddFilesToProfile(_ context.Context, profileID s
 	if !ok {
 		return syncflow.ErrProfileNotFound
 	}
+	normalizeProfileItems(profile)
+	occurrences := buildItemOccurrenceIndex(profile.Items)
 	for _, path := range paths {
 		if empty(path) {
 			continue
 		}
 		templatePath := pathmap.CompactHomePath(path)
+		relativePath := profileutil.NormalizeRelativePath(templatePath)
+		key := profileutil.StableItemID(templatePath, relativePath)
+		occurrence := occurrences[key]
+		occurrences[key]++
 		profile.Items = append(profile.Items, settings.ProfileItem{
-			ID:                 m.generateID("item"),
+			ID:                 profileutil.StableItemIDForOccurrence(templatePath, relativePath, occurrence),
 			SourcePathTemplate: templatePath,
-			RelativePath:       profileutil.NormalizeRelativePath(templatePath),
+			RelativePath:       relativePath,
 			Enabled:            true,
 		})
 	}
@@ -184,6 +196,7 @@ func (m *DefaultProfileManager) pullProfilesIntoSettings(ctx context.Context, da
 		return settings.Data{}, err
 	}
 	data.Profiles = mergeProfiles(data.Profiles, cloudProfiles)
+	normalizeProfiles(data.Profiles)
 	data.CloudBootstrapDone = true
 	if len(data.Profiles) > 0 && empty(data.ActiveProfileID) {
 		data.ActiveProfileID = data.Profiles[0].ID
@@ -210,4 +223,41 @@ func mergeProfiles(local []settings.Profile, cloud []settings.Profile) []setting
 		merged = append(merged, profile)
 	}
 	return merged
+}
+
+func normalizeProfiles(profiles []settings.Profile) bool {
+	changed := false
+	for i := range profiles {
+		if normalizeProfileItems(&profiles[i]) {
+			changed = true
+		}
+	}
+	return changed
+}
+
+func normalizeProfileItems(profile *settings.Profile) bool {
+	occurrences := make(map[string]int)
+	changed := false
+	for i := range profile.Items {
+		item := &profile.Items[i]
+		nextID := profileutil.StableItemIDForOccurrence(item.SourcePathTemplate, item.RelativePath, occurrences[stableItemKey(*item)])
+		occurrences[stableItemKey(*item)]++
+		if item.ID != nextID {
+			item.ID = nextID
+			changed = true
+		}
+	}
+	return changed
+}
+
+func buildItemOccurrenceIndex(items []settings.ProfileItem) map[string]int {
+	occurrences := make(map[string]int, len(items))
+	for _, item := range items {
+		occurrences[stableItemKey(item)]++
+	}
+	return occurrences
+}
+
+func stableItemKey(item settings.ProfileItem) string {
+	return profileutil.StableItemID(item.SourcePathTemplate, item.RelativePath)
 }

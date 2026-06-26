@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"GistSync/internal/pathmap"
+	"GistSync/internal/profileutil"
 	"GistSync/internal/settings"
 )
 
@@ -41,6 +42,7 @@ func (s *Service) loadManifest(ctx context.Context) (string, manifest, error) {
 	if data.Version == 0 {
 		data.Version = manifestVersion
 	}
+	normalizeManifestItemIDs(&data)
 	_ = s.manifestCache.Save(gistID, data)
 	s.observer.Record(action, time.Since(startedAt), true, len(content), len(data.Snapshots))
 	return gistID, data, nil
@@ -50,6 +52,7 @@ func (s *Service) saveManifest(ctx context.Context, gistID string, data manifest
 	startedAt := time.Now()
 	action := "save_manifest"
 	data.Version = manifestVersion
+	normalizeManifestItemIDs(&data)
 	raw, err := json.Marshal(data)
 	if err != nil {
 		s.observer.Record(action, time.Since(startedAt), false, 0, len(data.Snapshots))
@@ -134,4 +137,46 @@ func estimateManifestSize(data manifest) int {
 		return 0
 	}
 	return len(raw)
+}
+
+func normalizeManifestItemIDs(data *manifest) {
+	profileItems := make(map[string]map[string][]string, len(data.Profiles))
+	for i := range data.Profiles {
+		profile := &data.Profiles[i]
+		occurrences := make(map[string]int, len(profile.Items))
+		idsByKey := make(map[string][]string)
+		for j := range profile.Items {
+			item := &profile.Items[j]
+			key := stableManifestItemKey(item.SourcePathTemplate, item.RelativePath)
+			occurrence := occurrences[key]
+			occurrences[key]++
+			nextID := profileutil.StableItemIDForOccurrence(item.SourcePathTemplate, item.RelativePath, occurrence)
+			item.ID = nextID
+			idsByKey[key] = append(idsByKey[key], nextID)
+		}
+		profileItems[profile.ID] = idsByKey
+	}
+	for i := range data.Snapshots {
+		snapshot := &data.Snapshots[i]
+		idsByKey := profileItems[snapshot.ProfileID]
+		occurrences := make(map[string]int, len(snapshot.Items))
+		for j := range snapshot.Items {
+			item := &snapshot.Items[j]
+			key := stableManifestItemKey(item.SourcePathTemplate, item.RelativePath)
+			occurrence := occurrences[key]
+			occurrences[key]++
+			item.ItemID = manifestSnapshotItemID(item, idsByKey[key], occurrence)
+		}
+	}
+}
+
+func manifestSnapshotItemID(item *manifestSnapshotItem, ids []string, occurrence int) string {
+	if occurrence < len(ids) {
+		return ids[occurrence]
+	}
+	return profileutil.StableItemIDForOccurrence(item.SourcePathTemplate, item.RelativePath, occurrence)
+}
+
+func stableManifestItemKey(sourcePath string, relativePath string) string {
+	return profileutil.StableItemID(sourcePath, relativePath)
 }
